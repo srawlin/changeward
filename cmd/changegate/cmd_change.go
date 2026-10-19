@@ -9,6 +9,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/spf13/cobra"
 	"github.com/srawlin/changegate/adapters/postgres"
 	"github.com/srawlin/changegate/internal/config"
 	"github.com/srawlin/changegate/internal/engine"
@@ -16,7 +17,6 @@ import (
 	"github.com/srawlin/changegate/internal/session"
 	"github.com/srawlin/changegate/internal/store"
 	"github.com/srawlin/changegate/pkg/adapter"
-	"github.com/spf13/cobra"
 )
 
 func (a *app) sessions() (*session.Service, error) {

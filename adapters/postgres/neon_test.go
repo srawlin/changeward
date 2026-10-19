@@ -6,8 +6,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/srawlin/changegate/pkg/adapter"
 	"github.com/jackc/pgx/v5"
+	"github.com/srawlin/changegate/pkg/adapter"
 )
 
 // TestNeonLive exercises Neon checkpoints, restore and branch copies against

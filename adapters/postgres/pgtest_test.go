@@ -7,8 +7,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/srawlin/changegate/pkg/adapter"
 	"github.com/jackc/pgx/v5"
+	"github.com/srawlin/changegate/pkg/adapter"
 )
 
 // Integration tests need Postgres. They use $CG_TEST_PG18 and $CG_TEST_PG16

@@ -8,15 +8,16 @@ import (
 	"os"
 	"os/signal"
 	"path/filepath"
+	"strings"
 	"syscall"
 
+	"github.com/spf13/cobra"
 	"github.com/srawlin/changegate/adapters/postgres"
 	"github.com/srawlin/changegate/internal/executor"
 	"github.com/srawlin/changegate/internal/hooks"
 	"github.com/srawlin/changegate/internal/mcpproxy"
 	"github.com/srawlin/changegate/internal/mcpserver"
 	"github.com/srawlin/changegate/internal/model"
-	"github.com/spf13/cobra"
 )
 
 func (a *app) mcpServer(target string, checkpoint, branch bool, sessionID string) (*mcpserver.Server, error) {
@@ -209,7 +210,66 @@ func hookCmd() *cobra.Command {
 			return nil
 		},
 	}
-	cmd.AddCommand(claude, generic)
+	cursor := &cobra.Command{
+		Use:   "cursor",
+		Short: "Cursor beforeShellExecution hook",
+		RunE: func(*cobra.Command, []string) error {
+			b, _ := io.ReadAll(os.Stdin)
+			var in struct {
+				Command string `json:"command"`
+				Cwd     string `json:"cwd"`
+			}
+			if json.Unmarshal(b, &in) != nil {
+				return printJSON(map[string]string{"permission": "allow"})
+			}
+			if in.Cwd != "" {
+				_ = os.Chdir(in.Cwd)
+			}
+			d := evaluateHook(in.Command, "cursor", "")
+			out := map[string]string{"permission": d.Permission}
+			if d.Permission != "allow" {
+				out["userMessage"] = "Changegate: " + d.Reason
+				out["agentMessage"] = "Changegate: " + d.Reason
+			}
+			return printJSON(out)
+		},
+	}
+	gemini := &cobra.Command{
+		Use:   "gemini",
+		Short: "Gemini CLI BeforeTool hook (shell commands); exit 2 blocks",
+		RunE: func(*cobra.Command, []string) error {
+			b, _ := io.ReadAll(os.Stdin)
+			var in struct {
+				ToolName  string          `json:"tool_name"`
+				ToolInput json.RawMessage `json:"tool_input"`
+				Cwd       string          `json:"cwd"`
+			}
+			if err := json.Unmarshal(b, &in); err != nil {
+				return nil //nolint:nilerr // never break the agent on malformed hook input
+			}
+			var ti struct {
+				Command string `json:"command"`
+			}
+			_ = json.Unmarshal(in.ToolInput, &ti)
+			if ti.Command == "" {
+				return nil
+			}
+			if in.Cwd != "" {
+				_ = os.Chdir(in.Cwd)
+			}
+			d := evaluateHook(ti.Command, "gemini-cli", "")
+			if d.Permission == "allow" {
+				return nil
+			}
+			_ = printJSON(map[string]string{"decision": map[string]string{"deny": "deny", "ask": "ask"}[d.Permission], "reason": "Changegate: " + d.Reason})
+			if d.Permission == "deny" {
+				fmt.Fprintln(os.Stderr, "Changegate: "+d.Reason)
+				return exitError{code: 2}
+			}
+			return nil
+		},
+	}
+	cmd.AddCommand(claude, generic, cursor, gemini)
 	return cmd
 }
 
@@ -247,7 +307,7 @@ func installCmd() *cobra.Command {
 	var target string
 	cmd := &cobra.Command{
 		Use:   "install AGENT",
-		Short: "Install Changegate into a coding agent (claude-code, cursor, codex)",
+		Short: "Install Changegate into a coding agent (claude-code, cursor, gemini, codex, agents-md)",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(_ *cobra.Command, args []string) error {
 			a, err := newApp()
@@ -303,11 +363,70 @@ func installCmd() *cobra.Command {
 				}); err != nil {
 					return err
 				}
+				hp := filepath.Join(a.cfg.Dir, ".cursor", "hooks.json")
+				if err := mergeJSON(hp, func(m map[string]any) {
+					m["version"] = 1
+					h := sub(m, "hooks")
+					var kept []any
+					if list, ok := h["beforeShellExecution"].([]any); ok {
+						for _, e := range list {
+							if em, ok := e.(map[string]any); !ok || filepath.Base(firstWord(fmt.Sprint(em["command"]))) != "changegate" {
+								kept = append(kept, e)
+							}
+						}
+					}
+					h["beforeShellExecution"] = append(kept, map[string]any{"command": exe + " hook cursor"})
+				}); err != nil {
+					return err
+				}
+				fmt.Println("wrote", p, "and", hp)
+			case "gemini":
+				p := filepath.Join(a.cfg.Dir, ".gemini", "settings.json")
+				if err := mergeJSON(p, func(m map[string]any) {
+					sub(m, "mcpServers")["changegate"] = map[string]any{"command": exe, "args": serverArgs, "env": map[string]any{"CHANGEGATE_AGENT": "gemini-cli"}}
+					h := sub(m, "hooks")
+					var kept []any
+					if list, ok := h["BeforeTool"].([]any); ok {
+						for _, e := range list {
+							if !isChangegateHook(e) {
+								kept = append(kept, e)
+							}
+						}
+					}
+					h["BeforeTool"] = append(kept, map[string]any{"matcher": "run_shell_command", "hooks": []any{map[string]any{"type": "command", "command": exe + " hook gemini"}}})
+				}); err != nil {
+					return err
+				}
 				fmt.Println("wrote", p)
+			case "agents-md":
+				p := filepath.Join(a.cfg.Dir, "AGENTS.md")
+				b, _ := os.ReadFile(p)
+				if strings.Contains(string(b), "<!-- changegate -->") {
+					fmt.Println(p, "already has the Changegate section")
+					return nil
+				}
+				section := "\n<!-- changegate -->\n## Database and infrastructure changes\n\n" +
+					"This project guards `" + target + "` with Changegate. Never change it with raw `psql`, `kubectl` or `terraform`.\n" +
+					"Use the `changegate` MCP tools: `query` to read, `propose_change` to preview a change (it shows exact rows,\n" +
+					"locks and reversibility without changing anything), then `apply_change`. Every change can be undone with\n" +
+					"`undo_change`. If a change needs approval, tell the user and wait; do not look for another way. From a shell,\n" +
+					"use `changegate exec --intent \"<what the user asked>\" \"<SQL>\"`. Never run `changegate approve`.\n"
+				f, err := os.OpenFile(p, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0o644)
+				if err != nil {
+					return err
+				}
+				_, err = f.WriteString(section)
+				if cerr := f.Close(); err == nil {
+					err = cerr
+				}
+				if err != nil {
+					return err
+				}
+				fmt.Println("added the Changegate section to", p)
 			case "codex":
 				fmt.Printf("add to ~/.codex/config.toml:\n\n[mcp_servers.changegate]\ncommand = %q\nargs = %s\nenv = { CHANGEGATE_AGENT = \"codex\" }\n", exe, tomlList(serverArgs))
 			default:
-				return fmt.Errorf("unknown agent %q (claude-code, cursor, codex)", args[0])
+				return fmt.Errorf("unknown agent %q (claude-code, cursor, gemini, codex, agents-md)", args[0])
 			}
 			return nil
 		},

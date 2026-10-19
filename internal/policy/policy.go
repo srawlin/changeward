@@ -16,11 +16,11 @@ import (
 	"strings"
 	"time"
 
-	"github.com/srawlin/changegate/internal/model"
-	"github.com/srawlin/changegate/pkg/adapter"
 	"github.com/google/cel-go/cel"
 	"github.com/google/cel-go/common/types"
 	"github.com/google/cel-go/common/types/ref"
+	"github.com/srawlin/changegate/internal/model"
+	"github.com/srawlin/changegate/pkg/adapter"
 	"gopkg.in/yaml.v3"
 )
 

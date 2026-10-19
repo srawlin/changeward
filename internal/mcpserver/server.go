@@ -12,6 +12,7 @@ import (
 	"strings"
 	"sync"
 
+	"github.com/modelcontextprotocol/go-sdk/mcp"
 	"github.com/srawlin/changegate/adapters/postgres"
 	"github.com/srawlin/changegate/internal/backend"
 	"github.com/srawlin/changegate/internal/engine"
@@ -19,7 +20,6 @@ import (
 	"github.com/srawlin/changegate/internal/policy"
 	"github.com/srawlin/changegate/internal/session"
 	"github.com/srawlin/changegate/pkg/adapter"
-	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
 
 // Querier runs read-only queries (implemented by the SQL adapters).

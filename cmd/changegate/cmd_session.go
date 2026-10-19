@@ -5,11 +5,11 @@ import (
 	"fmt"
 	"os"
 
+	"github.com/jackc/pgx/v5"
+	"github.com/spf13/cobra"
 	"github.com/srawlin/changegate/adapters/postgres"
 	"github.com/srawlin/changegate/internal/model"
 	"github.com/srawlin/changegate/internal/session"
-	"github.com/jackc/pgx/v5"
-	"github.com/spf13/cobra"
 )
 
 func sessionCmd() *cobra.Command {

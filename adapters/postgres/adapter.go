@@ -22,10 +22,10 @@ import (
 	"sync"
 	"time"
 
-	"github.com/srawlin/changegate/pkg/adapter"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgxpool"
+	"github.com/srawlin/changegate/pkg/adapter"
 )
 
 // Version is the adapter version.

@@ -20,13 +20,13 @@ import (
 	"strings"
 	"time"
 
+	"github.com/modelcontextprotocol/go-sdk/mcp"
 	"github.com/srawlin/changegate/adapters/postgres"
 	"github.com/srawlin/changegate/internal/engine"
 	"github.com/srawlin/changegate/internal/mcpserver"
 	"github.com/srawlin/changegate/internal/model"
 	"github.com/srawlin/changegate/internal/policy"
 	"github.com/srawlin/changegate/pkg/adapter"
-	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
 
 // DefaultSQLTools are tool names of popular database MCP servers whose

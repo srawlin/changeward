@@ -44,7 +44,10 @@ func freshDB(t *testing.T) adapter.Target {
 	if _, err := root.ExecContext(ctx, "CREATE DATABASE "+name); err != nil {
 		t.Fatal(err)
 	}
-	t.Cleanup(func() { _, _ = root.ExecContext(context.Background(), "DROP DATABASE IF EXISTS "+name); _ = root.Close() })
+	t.Cleanup(func() {
+		_, _ = root.ExecContext(context.Background(), "DROP DATABASE IF EXISTS "+name)
+		_ = root.Close()
+	})
 	dsn := adminDSN() + name
 	db, _ := sql.Open("mysql", dsn)
 	defer func() { _ = db.Close() }()

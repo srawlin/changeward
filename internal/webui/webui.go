@@ -162,4 +162,6 @@ func (u *UI) action(w http.ResponseWriter, r *http.Request) {
 	http.Redirect(w, r, "/changes/"+c.ID+"/view?flash="+urlQuery(msg), http.StatusSeeOther)
 }
 
-func urlQuery(s string) string { return strings.NewReplacer(" ", "+", "&", "%26", "#", "%23").Replace(s) }
+func urlQuery(s string) string {
+	return strings.NewReplacer(" ", "+", "&", "%26", "#", "%23").Replace(s)
+}

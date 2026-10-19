@@ -147,7 +147,9 @@ func (l *Local) Propose(ctx context.Context, r ProposeRequest) (*model.Change, e
 }
 
 // Get implements Backend.
-func (l *Local) Get(ctx context.Context, ref string) (*model.Change, error) { return l.Engine.Get(ctx, ref) }
+func (l *Local) Get(ctx context.Context, ref string) (*model.Change, error) {
+	return l.Engine.Get(ctx, ref)
+}
 
 // ApproveInline implements Backend.
 func (l *Local) ApproveInline(ctx context.Context, ref, planHash string, approved bool, channel string) (*model.Change, error) {

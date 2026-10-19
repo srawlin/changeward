@@ -10,11 +10,11 @@ import (
 	"strings"
 	"time"
 
+	"github.com/spf13/cobra"
 	"github.com/srawlin/changegate/adapters/postgres"
 	"github.com/srawlin/changegate/internal/migrations"
 	"github.com/srawlin/changegate/internal/model"
 	"github.com/srawlin/changegate/internal/session"
-	"github.com/spf13/cobra"
 )
 
 func promoteCmd() *cobra.Command {

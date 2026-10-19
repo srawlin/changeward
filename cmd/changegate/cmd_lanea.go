@@ -10,14 +10,14 @@ import (
 	"strings"
 	"time"
 
+	"github.com/jackc/pgx/v5"
+	"github.com/spf13/cobra"
 	"github.com/srawlin/changegate/adapters/postgres"
 	"github.com/srawlin/changegate/internal/lanea"
 	"github.com/srawlin/changegate/internal/migrations"
 	"github.com/srawlin/changegate/internal/model"
 	"github.com/srawlin/changegate/internal/policy"
 	"github.com/srawlin/changegate/pkg/adapter"
-	"github.com/jackc/pgx/v5"
-	"github.com/spf13/cobra"
 )
 
 // Framework bookkeeping tables, excluded from data comparisons.
@@ -152,13 +152,17 @@ func runRehearse(f *rehearseFlags) error {
 		for _, p := range f.newPaths {
 			want[filepath.Clean(p)] = true
 		}
-		isNew = func(m migrations.Migration) bool { return want[filepath.Clean(m.Path)] || want[filepath.Clean(m.DownPath)] }
+		isNew = func(m migrations.Migration) bool {
+			return want[filepath.Clean(m.Path)] || want[filepath.Clean(m.DownPath)]
+		}
 	case f.baseRef != "":
 		changed, err := changedFiles(f.dir, f.baseRef)
 		if err != nil {
 			return err
 		}
-		isNew = func(m migrations.Migration) bool { return changed[filepath.Clean(m.Path)] || (m.DownPath != "" && changed[filepath.Clean(m.DownPath)]) }
+		isNew = func(m migrations.Migration) bool {
+			return changed[filepath.Clean(m.Path)] || (m.DownPath != "" && changed[filepath.Clean(m.DownPath)])
+		}
 	case !f.all:
 		return errors.New("say which migrations are new: --base-ref REF, --new PATH, or --all")
 	}

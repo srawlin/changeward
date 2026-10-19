@@ -5,8 +5,8 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/srawlin/changegate/pkg/adapter"
 	pg "github.com/pganalyze/pg_query_go/v6"
+	"github.com/srawlin/changegate/pkg/adapter"
 	"google.golang.org/protobuf/proto"
 )
 
@@ -25,7 +25,9 @@ var softDropKinds = map[pg.ObjectType]bool{
 // classifyDDL decides how a DDL statement will be applied and undone.
 func classifyDDL(s *Stmt) ddlStatic {
 	n := s.Node
-	rev := func(r adapter.Reversibility, notes ...string) ddlStatic { return ddlStatic{Reversibility: r, Notes: notes} }
+	rev := func(r adapter.Reversibility, notes ...string) ddlStatic {
+		return ddlStatic{Reversibility: r, Notes: notes}
+	}
 	switch {
 	case n.GetCreateStmt() != nil, n.GetCreateTableAsStmt() != nil, n.GetCreateSchemaStmt() != nil,
 		n.GetCreateSeqStmt() != nil, n.GetCreateExtensionStmt() != nil, n.GetCreateEnumStmt() != nil,
@@ -212,7 +214,7 @@ func applyDDL(ctx context.Context, q querier, s *Stmt, st ddlStatic, trashName f
 		}
 	case n.GetDropStmt() != nil && n.GetDropStmt().RemoveType == pg.ObjectType_OBJECT_SCHEMA:
 		for _, o := range n.GetDropStmt().Objects {
-			modInverse = append(modInverse, []string{"CREATE SCHEMA "+QuoteIdent(nameFromNode(o))})
+			modInverse = append(modInverse, []string{"CREATE SCHEMA " + QuoteIdent(nameFromNode(o))})
 		}
 	case n.GetDropStmt() != nil && (n.GetDropStmt().RemoveType == pg.ObjectType_OBJECT_FUNCTION || n.GetDropStmt().RemoveType == pg.ObjectType_OBJECT_PROCEDURE):
 		for _, o := range n.GetDropStmt().Objects {

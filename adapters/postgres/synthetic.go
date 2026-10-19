@@ -13,11 +13,11 @@ import (
 const MaxSyntheticRows = 1_000_000
 
 type synCol struct {
-	name, typ, typtype, elemType string
-	notNull, hasDefault, generated  bool
-	maxLen                          int
-	enumType                        string
-	fkTable, fkCol                  string
+	name, typ, typtype, elemType   string
+	notNull, hasDefault, generated bool
+	maxLen                         int
+	enumType                       string
+	fkTable, fkCol                 string
 }
 
 type synTable struct {

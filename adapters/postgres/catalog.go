@@ -254,7 +254,7 @@ type catalogObjects struct {
 	Schemas     map[string]bool
 	Extensions  map[string]bool
 	Triggers    map[uint32]trigger // trigger oid
-	IndexOwner  map[uint32]uint32 // index oid -> table oid
+	IndexOwner  map[uint32]uint32  // index oid -> table oid
 }
 
 type constraint struct {
@@ -384,8 +384,11 @@ func loadCatalog(ctx context.Context, q querier) (*catalogObjects, error) {
 
 // catalogDiff lists objects created between two inventories.
 type catalogDiff struct {
-	Relations   []relRef
-	Columns     []struct{ Rel relRef; Name string }
+	Relations []relRef
+	Columns   []struct {
+		Rel  relRef
+		Name string
+	}
 	Constraints []constraint
 	Functions   []string
 	Types       []string

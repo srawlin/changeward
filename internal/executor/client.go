@@ -37,7 +37,9 @@ type APIError struct {
 	Body   ErrorBody
 }
 
-func (e *APIError) Error() string { return fmt.Sprintf("executor: %s (HTTP %d)", e.Body.Error, e.Status) }
+func (e *APIError) Error() string {
+	return fmt.Sprintf("executor: %s (HTTP %d)", e.Body.Error, e.Status)
+}
 
 func (c *Client) call(ctx context.Context, method, path string, in, out any) error {
 	var body io.Reader
