@@ -33,7 +33,7 @@ func main() {
 		planCmd(), execCmd(), applyCmd(), approveCmd(true), approveCmd(false), showCmd(), statusCmd(),
 		undoCmd(), logCmd(), rewindCmd(), sessionCmd(), checkpointCmd(), restoreCmd(), branchCmd(), trashCmd(),
 		auditCmd(), policyCmd(), adapterCmd(),
-		mcpCmd(), proxyCmd(), hookCmd(), installCmd(), promoteCmd(),
+		mcpCmd(), proxyCmd(), hookCmd(), installCmd(), promoteCmd(), reconcileCmd(), driftCmd(),
 		migrationsCmd(), rehearseCmd(), reportCmd(), gateCmd(), detectCmd(), serveCmd(), uiCmd(), executorCmd(), changesetCmd(),
 	)
 	if err := root.Execute(); err != nil {
