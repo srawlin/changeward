@@ -10,7 +10,7 @@ ARG VERSION=dev
 RUN CGO_ENABLED=1 go build -trimpath -ldflags "-s -w -X main.version=${VERSION}" -o /out/changegate ./cmd/changegate
 
 FROM alpine:3.20
-RUN apk add --no-cache ca-certificates git && adduser -D -u 10001 changegate
+RUN apk add --no-cache ca-certificates git kubectl && adduser -D -u 10001 changegate
 COPY --from=build /out/changegate /usr/local/bin/changegate
 USER changegate
 WORKDIR /work

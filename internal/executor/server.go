@@ -18,6 +18,7 @@ import (
 
 	"github.com/srawlin/changegate/internal/backend"
 	"github.com/srawlin/changegate/internal/engine"
+	"github.com/srawlin/changegate/internal/gitops"
 	"github.com/srawlin/changegate/internal/model"
 	"github.com/srawlin/changegate/internal/session"
 	"github.com/srawlin/changegate/internal/store"
@@ -201,6 +202,22 @@ func (s *Server) Handler() http.Handler {
 			return nil, err
 		}
 		return s.local(r).ApproveInline(r.Context(), c.ID, in.PlanHash, in.Approved, in.Channel)
+	})
+	// GitOps gate (Argo CD PreSync hooks, CI on GitOps repositories).
+	h("POST /v1/gitops/gate", RolePropose, func(_ http.ResponseWriter, r *http.Request) (any, error) {
+		var in struct {
+			Target   string `json:"target"`
+			Payload  string `json:"payload"`
+			Revision string `json:"revision"`
+		}
+		if err := json.NewDecoder(r.Body).Decode(&in); err != nil {
+			return nil, badRequest(err)
+		}
+		t, err := s.Sessions.Resolve(in.Target)
+		if err != nil {
+			return nil, err
+		}
+		return gitops.Gate(r.Context(), s.Engine, t, in.Payload, model.Principal{Kind: "human", Human: identity(caller(r))}, model.Provenance{Commit: in.Revision})
 	})
 	// Out-of-band approval by someone else (separation of duties is enforced by the engine).
 	h("POST /v1/changes/{ref}/approve", RoleApprove, func(_ http.ResponseWriter, r *http.Request) (any, error) {

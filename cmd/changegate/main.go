@@ -34,7 +34,7 @@ func main() {
 		undoCmd(), logCmd(), rewindCmd(), sessionCmd(), checkpointCmd(), restoreCmd(), branchCmd(), trashCmd(),
 		auditCmd(), policyCmd(), adapterCmd(),
 		mcpCmd(), proxyCmd(), hookCmd(), installCmd(), promoteCmd(), reconcileCmd(), driftCmd(),
-		migrationsCmd(), rehearseCmd(), reportCmd(), gateCmd(), detectCmd(), serveCmd(), uiCmd(), executorCmd(), changesetCmd(),
+		migrationsCmd(), rehearseCmd(), reportCmd(), gateCmd(), detectCmd(), serveCmd(), uiCmd(), executorCmd(), changesetCmd(), k8sCmd(),
 	)
 	if err := root.Execute(); err != nil {
 		var ee exitError

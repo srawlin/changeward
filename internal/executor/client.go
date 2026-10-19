@@ -163,3 +163,9 @@ func (c *Client) Query(ctx context.Context, id, q string, maxRows int) (*adapter
 	var out adapter.QueryResult
 	return &out, c.call(ctx, "POST", "/v1/sessions/"+esc(id)+"/query", map[string]any{"query": q, "max_rows": maxRows}, &out)
 }
+
+// GitOpsGate runs the GitOps gate on the executor.
+func (c *Client) GitOpsGate(ctx context.Context, target, payload, revision string) (*model.Change, error) {
+	var ch model.Change
+	return &ch, c.call(ctx, "POST", "/v1/gitops/gate", map[string]string{"target": target, "payload": payload, "revision": revision}, &ch)
+}

@@ -1,0 +1,39 @@
+# Argo CD PreSync hook: block the sync unless Changegate approved this exact
+# plan (desired manifests vs. live cluster). Add to the application's manifests.
+#
+# The gate runs on a shared executor (it performs the server-side dry run with
+# its own credentials and keeps approvals). Approve pending syncs with
+# `changegate approve PLAN_ID`, Slack, or the web view; Argo CD retries the sync.
+#
+# REVISION: pass the synced revision, e.g. as a Helm value set from
+# $ARGOCD_APP_REVISION in the Application's helm parameters.
+apiVersion: batch/v1
+kind: Job
+metadata:
+  generateName: changegate-gate-
+  annotations:
+    argocd.argoproj.io/hook: PreSync
+    argocd.argoproj.io/hook-delete-policy: BeforeHookCreation
+spec:
+  backoffLimit: 0
+  activeDeadlineSeconds: 300
+  template:
+    spec:
+      restartPolicy: Never
+      securityContext: { runAsNonRoot: true, runAsUser: 10001 }
+      containers:
+        - name: gate
+          image: ghcr.io/srawlin/changegate:latest
+          env:
+            - { name: REPO_URL, value: "https://github.com/your-org/gitops.git" }
+            - { name: REVISION, value: "main" }
+            - { name: MANIFESTS_PATH, value: "apps/shop" }
+            - { name: CHANGEGATE_EXECUTOR_URL, value: "http://changegate-executor.changegate.svc:8443" }
+            - { name: ARGOCD_APP_REVISION, value: "main" }
+            - name: CHANGEGATE_EXECUTOR_TOKEN
+              valueFrom: { secretKeyRef: { name: changegate-gate-token, key: token } }
+          command: ["sh", "-c"]
+          args:
+            - >-
+              git clone --quiet --depth 1 --branch "$REVISION" "$REPO_URL" /tmp/repo &&
+              changegate k8s gate --manifests "/tmp/repo/$MANIFESTS_PATH" --target cluster
