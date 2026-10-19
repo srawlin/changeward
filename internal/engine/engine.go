@@ -284,7 +284,11 @@ func (e *Engine) Approve(ctx context.Context, ref string, req ApproveRequest) (*
 	if c.Decision != nil && c.Decision.Channel == policy.ChannelOutOfBand && InBandChannels[req.Channel] {
 		return c, fmt.Errorf("policy requires out-of-band approval; %s cannot approve this change", req.Channel)
 	}
-	if req.Approver == c.Principal.Agent || (req.Approver == c.Principal.Human && c.Target.Env != adapter.EnvPersonal) {
+	// The agent can never approve its own change. Inline confirmation by the
+	// delegating human is the point of an inline decision; out-of-band
+	// approval must come from someone other than the proposer (§6.6).
+	outOfBand := c.Decision != nil && c.Decision.Channel == policy.ChannelOutOfBand
+	if req.Approver == c.Principal.Agent || (outOfBand && req.Approver == c.Principal.Human) {
 		return c, errors.New("separation of duties: the proposer cannot approve its own change")
 	}
 	for _, a := range c.Approvals {

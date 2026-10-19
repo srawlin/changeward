@@ -12,10 +12,6 @@ func stub(use, short string) *cobra.Command {
 	return &cobra.Command{Use: use, Short: short, RunE: func(*cobra.Command, []string) error { return errors.New("not implemented yet") }}
 }
 
-func mcpCmd() *cobra.Command        { return stub("mcp", "MCP server") }
-func proxyCmd() *cobra.Command      { return stub("proxy", "MCP proxy") }
-func hookCmd() *cobra.Command       { return stub("hook", "agent hooks") }
-func installCmd() *cobra.Command    { return stub("install", "install integrations") }
 func promoteCmd() *cobra.Command    { return stub("promote", "promote a session") }
 func migrationsCmd() *cobra.Command { return stub("migrations", "migrations") }
 func rehearseCmd() *cobra.Command   { return stub("rehearse", "rehearse") }
