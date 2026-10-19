@@ -1,0 +1,19 @@
+version: 1
+freezes:
+  - name: code-freeze
+    start: 2025-07-11T00:00:00Z
+    end: 2099-01-01T00:00:00Z
+rules:
+  - name: code-freeze
+    when: calendar.freeze("code-freeze") && change.env.startsWith("prod") && session.incident_ref == ""
+    decide: deny
+    reason: production is in a code and action freeze (break-glass needs an incident reference)
+  - name: agents-never-destroy-prod-alone
+    when: principal.kind == "agent" && change.env.startsWith("prod") && change.destructive
+    decide: require
+    channel: out-of-band
+    approvers: ["group:dba"]
+    reason: destructive production change proposed by an agent
+  - name: personal-sandbox
+    when: change.lane == "direct" && change.env == "personal" && change.reversibility != "irreversible"
+    decide: approve

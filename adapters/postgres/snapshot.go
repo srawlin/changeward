@@ -52,7 +52,7 @@ func TakeSnapshot(ctx context.Context, q querier, withData bool, excludeTables m
 	s := &Snapshot{Objects: map[string]string{}, Tables: map[string]TableData{}}
 	queries := []struct{ prefix, sql string }{
 		{"schema", `SELECT n.nspname, '' FROM pg_namespace n WHERE ` + userSchemaFilter},
-		{"relation", `SELECT n.nspname || '.' || c.relname, c.relkind::text || coalesce(' ' || c.relpersistence::text, '')
+		{"relation", `SELECT n.nspname || '.' || c.relname, c.relkind::text || coalesce(' ' || c.relpersistence::text, '') || coalesce(' acl=' || c.relacl::text, '')
 			FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace
 			WHERE c.relkind IN ('r','p','v','m','S','f','c') AND ` + userSchemaFilter},
 		{"column", `SELECT n.nspname || '.' || c.relname || '.' || a.attname,

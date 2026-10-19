@@ -1,0 +1,81 @@
+name: release
+on:
+  push:
+    tags: ["v*"]
+permissions:
+  contents: write
+  packages: write
+  id-token: write   # Sigstore keyless signing, npm provenance
+jobs:
+  build:
+    strategy:
+      matrix:
+        include:
+          - { runner: ubuntu-latest }      # linux/amd64
+          - { runner: ubuntu-24.04-arm }   # linux/arm64
+          - { runner: macos-13 }           # darwin/amd64
+          - { runner: macos-14 }           # darwin/arm64
+    runs-on: ${{ matrix.runner }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with: { go-version-file: go.mod }
+      - run: VERSION=${GITHUB_REF_NAME} ./scripts/package.sh
+        env: { MACOSX_DEPLOYMENT_TARGET: "12.0" }
+      - uses: actions/upload-artifact@v4
+        with: { name: "dist-${{ matrix.runner }}", path: dist/*.tar.gz }
+
+  publish:
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with: { path: dist, merge-multiple: true }
+      - name: Checksums and SBOM
+        run: |
+          cd dist && sha256sum *.tar.gz > checksums.txt && cat checksums.txt
+      - uses: sigstore/cosign-installer@v3
+      - name: Sign checksums (keyless)
+        run: cosign sign-blob --yes --bundle dist/checksums.txt.sigstore.json dist/checksums.txt
+      - name: GitHub release
+        env: { GH_TOKEN: "${{ github.token }}" }
+        run: gh release create "$GITHUB_REF_NAME" dist/* --generate-notes
+      - uses: actions/setup-node@v4
+        with: { node-version: 22, registry-url: "https://registry.npmjs.org" }
+      - name: npm (@changegate/cli)
+        working-directory: packaging/npm
+        env: { NODE_AUTH_TOKEN: "${{ secrets.NPM_TOKEN }}" }
+        run: |
+          npm version --no-git-tag-version "${GITHUB_REF_NAME#v}"
+          npm publish --access public --provenance
+      - uses: astral-sh/setup-uv@v6
+      - name: PyPI (changegate)
+        working-directory: packaging/pypi
+        env: { UV_PUBLISH_TOKEN: "${{ secrets.PYPI_TOKEN }}" }
+        run: |
+          v="${GITHUB_REF_NAME#v}"
+          sed -i "s/^version = .*/version = \"$v\"/" pyproject.toml
+          sed -i "s/^__version__ = .*/__version__ = \"$v\"/" src/changegate/__init__.py
+          uv build && uv publish
+      - name: Homebrew formula
+        env: { TAP_TOKEN: "${{ secrets.HOMEBREW_TAP_TOKEN }}" }
+        run: |
+          v="${GITHUB_REF_NAME#v}"; f=packaging/homebrew/changegate.rb
+          sed -i "s/VERSION/$v/g" $f
+          for p in darwin_arm64 darwin_amd64 linux_arm64 linux_amd64; do
+            s=$(grep "changegate_${p}.tar.gz" dist/checksums.txt | cut -d' ' -f1)
+            sed -i "s/SHA256_$(echo $p | tr a-z A-Z)/$s/" $f
+          done
+          git clone "https://x-access-token:${TAP_TOKEN}@github.com/changegate/homebrew-tap" tap
+          cp $f tap/Formula/changegate.rb
+          cd tap && git -c user.name=changegate-bot -c user.email=bot@changegate.dev commit -am "changegate $v" && git push
+      - uses: docker/setup-buildx-action@v3
+      - uses: docker/login-action@v3
+        with: { registry: ghcr.io, username: "${{ github.actor }}", password: "${{ github.token }}" }
+      - uses: docker/build-push-action@v6
+        with:
+          push: true
+          platforms: linux/amd64,linux/arm64
+          build-args: VERSION=${{ github.ref_name }}
+          tags: ghcr.io/changegate/changegate:${{ github.ref_name }},ghcr.io/changegate/changegate:latest

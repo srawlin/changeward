@@ -2,6 +2,7 @@ package postgres
 
 import (
 	"context"
+	"os/exec"
 	"strings"
 	"testing"
 
@@ -74,6 +75,35 @@ func TestRehearseMigrations(t *testing.T) {
 		}
 		if rep.Passed || !strings.Contains(rep.Results[0].Error, "forward migration failed") {
 			t.Fatalf("expected failure: %+v", rep.Results[0])
+		}
+	})
+}
+
+// Command mode (Rails/Django/Alembic-style): psql stands in for the framework CLI.
+func TestRehearseCommands(t *testing.T) {
+	if _, err := exec.LookPath("psql"); err != nil {
+		t.Skip("psql not installed")
+	}
+	eachServer(t, func(t *testing.T, admin string) {
+		up := `psql "$DATABASE_URL" -q -v ON_ERROR_STOP=1 -c "CREATE TABLE IF NOT EXISTS widgets (id int PRIMARY KEY)" -c "ALTER TABLE widgets ADD COLUMN IF NOT EXISTS color text"`
+		down := `test "$CHANGEGATE_NEW_MIGRATIONS" = "{n}" && psql "$DATABASE_URL" -q -v ON_ERROR_STOP=1 -c "ALTER TABLE widgets DROP COLUMN color"`
+		rep, err := RehearseMigrations(context.Background(), RehearsalOptions{AdminDSN: admin, Commands: &Commands{Up: up, Down: down}}, nil,
+			[]MigrationInput{{ID: "20240101", Framework: "rails", Name: "add_color", Path: "db/migrate/20240101_add_color.rb", HasDown: true}})
+		if err != nil {
+			t.Fatal(err)
+		}
+		r := rep.Results[0]
+		if !r.Passed || r.Reversibility != adapter.Reversible || !strings.Contains(strings.Join(r.Effects, " "), "+ column public.widgets.color") {
+			t.Fatalf("command rehearsal: %+v", r)
+		}
+		// A down command that does not undo the change is caught.
+		rep, err = RehearseMigrations(context.Background(), RehearsalOptions{AdminDSN: admin, Commands: &Commands{Up: up, Down: "true"}}, nil,
+			[]MigrationInput{{ID: "20240101", Framework: "rails", Name: "add_color", HasDown: true}})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if rep.Results[0].Reversibility == adapter.Reversible {
+			t.Fatalf("no-op down accepted: %+v", rep.Results[0])
 		}
 	})
 }

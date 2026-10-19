@@ -293,7 +293,7 @@ func execCmd() *cobra.Command {
 				return err
 			}
 			if !jsonOut {
-				renderChange(os.Stderr, c)
+				renderChangeOpts(os.Stderr, c, false)
 			}
 			return a.applyFlow(bg(), c, yes)
 		},

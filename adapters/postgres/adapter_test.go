@@ -3,10 +3,12 @@ package postgres
 import (
 	"context"
 	"errors"
+	"fmt"
 	"strings"
 	"testing"
 
 	"github.com/changegate/changegate/pkg/adapter"
+	"github.com/jackc/pgx/v5"
 )
 
 func newA(t *testing.T) *Adapter {
@@ -81,6 +83,40 @@ func TestDMLPlanDetails(t *testing.T) {
 		if _, err := a.Plan(context.Background(), tg, adapter.Operation{Kind: "sql", Payload: "ALTER TABLE orders ALTER COLUMN status SET NOT NULL; UPDATE orders SET status = NULL WHERE id = 1"}); err == nil ||
 			!strings.Contains(err.Error(), "failed") {
 			t.Fatalf("expected dry-run failure, got %v", err)
+		}
+	})
+}
+
+func TestSideEffectsNeverDryRun(t *testing.T) {
+	eachServer(t, func(t *testing.T, admin string) {
+		ctx := context.Background()
+		a := newA(t)
+		tg, conn := freshDB(t, admin, "personal", seedSQL)
+		// A second session that pg_terminate_backend would kill if executed.
+		victim, err := pgx.Connect(ctx, tg.Config["dsn"])
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer func() { _ = victim.Close(ctx) }()
+		var pid int
+		if err := victim.QueryRow(ctx, "SELECT pg_backend_pid()").Scan(&pid); err != nil {
+			t.Fatal(err)
+		}
+		for _, sql := range []string{
+			fmt.Sprintf("SELECT pg_terminate_backend(%d)", pid),
+			fmt.Sprintf("UPDATE orders SET status = 'x' WHERE pg_terminate_backend(%d)", pid),
+			"DO $$ BEGIN DELETE FROM orders; END $$",
+		} {
+			p := mustPlan(t, a, tg, sql)
+			if p.Reversibility != adapter.Irreversible || !p.Destructive {
+				t.Fatalf("%s: %s", sql, p.Reversibility)
+			}
+		}
+		if err := victim.Ping(ctx); err != nil {
+			t.Fatalf("dry run executed a side-effect function: %v", err)
+		}
+		if n := scalar[int64](t, conn, "SELECT count(*) FROM orders"); n != 50 {
+			t.Fatalf("DO block ran during planning: %d rows", n)
 		}
 	})
 }

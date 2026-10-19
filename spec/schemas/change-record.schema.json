@@ -1,0 +1,158 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://changegate.dev/schemas/v0/change-record.schema.json",
+  "title": "Changegate Change Record (v0)",
+  "type": "object",
+  "required": ["id", "seq", "state", "principal", "provenance", "target", "operation", "created_at"],
+  "properties": {
+    "id": { "type": "string", "pattern": "^c_[0-9a-f]+$" },
+    "seq": { "type": "integer", "minimum": 1 },
+    "session_id": { "type": "string" },
+    "state": { "$ref": "#/$defs/state" },
+    "principal": {
+      "type": "object",
+      "required": ["kind"],
+      "properties": {
+        "kind": { "enum": ["agent", "human"] },
+        "agent": { "type": "string" },
+        "human": { "type": "string" }
+      }
+    },
+    "provenance": {
+      "type": "object",
+      "required": ["lane"],
+      "properties": {
+        "lane": { "enum": ["ci", "direct"] },
+        "session_id": { "type": "string" },
+        "pr": { "type": "string" },
+        "commit": { "type": "string" },
+        "host": { "type": "string" }
+      }
+    },
+    "target": {
+      "type": "object",
+      "required": ["name", "adapter", "env"],
+      "properties": {
+        "name": { "type": "string" },
+        "adapter": { "type": "string" },
+        "env": { "$ref": "#/$defs/env" }
+      },
+      "description": "Connection config (credentials) is never stored in the record."
+    },
+    "operation": { "$ref": "#/$defs/operation" },
+    "plan": { "$ref": "#/$defs/plan" },
+    "decision": {
+      "type": "object",
+      "required": ["decision"],
+      "properties": {
+        "decision": { "enum": ["approve", "require", "deny"] },
+        "rules": { "type": "array", "items": { "type": "string" } },
+        "reasons": { "type": "array", "items": { "type": "string" } },
+        "approvers": { "type": "array", "items": { "type": "string" } },
+        "channel": { "enum": ["inline", "out-of-band"] },
+        "quorum": { "type": "integer", "minimum": 0 }
+      }
+    },
+    "approvals": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["plan_hash", "approver", "channel", "approved", "at"],
+        "properties": {
+          "id": { "type": "string" },
+          "change_id": { "type": "string" },
+          "plan_hash": { "type": "string", "pattern": "^sha256:[0-9a-f]{64}$" },
+          "approver": { "type": "string" },
+          "channel": { "type": "string" },
+          "approved": { "type": "boolean" },
+          "reason": { "type": "string" },
+          "at": { "type": "string", "format": "date-time" }
+        }
+      }
+    },
+    "receipt": { "$ref": "#/$defs/receipt" },
+    "verification": {
+      "type": "object",
+      "properties": {
+        "passed": { "type": "boolean" },
+        "checks": { "type": "array", "items": { "$ref": "#/$defs/check" } }
+      }
+    },
+    "undo_receipt": { "$ref": "#/$defs/receipt" },
+    "error": { "type": "string" },
+    "created_at": { "type": "string", "format": "date-time" },
+    "updated_at": { "type": "string", "format": "date-time" }
+  },
+  "$defs": {
+    "state": {
+      "enum": ["proposed", "planned", "rehearsed", "auto-approved", "awaiting-approval", "approved", "rejected",
+        "applying", "applied", "verifying", "verified", "failed", "undoing", "undone"]
+    },
+    "env": { "enum": ["personal", "shared-dev", "staging", "prod", "prod-restricted"] },
+    "reversibility": { "enum": ["reversible", "compensatable", "checkpoint-only", "irreversible"] },
+    "operation": {
+      "type": "object",
+      "required": ["kind", "payload"],
+      "properties": {
+        "kind": { "type": "string" },
+        "payload": { "type": "string" },
+        "params": { "type": "object", "additionalProperties": { "type": "string" } },
+        "intent": { "type": "string" }
+      }
+    },
+    "effect": {
+      "type": "object",
+      "required": ["kind", "description"],
+      "properties": {
+        "kind": { "type": "string" },
+        "object": { "type": "string" },
+        "description": { "type": "string" },
+        "rows": { "type": "integer" }
+      }
+    },
+    "plan": {
+      "type": "object",
+      "required": ["id", "hash", "adapter", "target", "env", "operation", "reversibility"],
+      "properties": {
+        "id": { "type": "string", "pattern": "^p_[0-9a-f]+$" },
+        "hash": { "type": "string", "pattern": "^sha256:[0-9a-f]{64}$" },
+        "adapter": { "type": "string" },
+        "target": { "type": "string" },
+        "env": { "$ref": "#/$defs/env" },
+        "operation": { "$ref": "#/$defs/operation" },
+        "classification": { "type": "object" },
+        "effects": { "type": "array", "items": { "$ref": "#/$defs/effect" } },
+        "reversibility": { "$ref": "#/$defs/reversibility" },
+        "destructive": { "type": "boolean" },
+        "blast_rows": { "type": "integer" },
+        "warnings": { "type": "array", "items": { "type": "string" } },
+        "facts": { "type": "object", "additionalProperties": { "type": "string" } },
+        "diff": { "type": "string", "description": "Display only; redacted; excluded from the hash." },
+        "precondition_hash": { "type": "string" },
+        "rehearsal_tier": { "enum": ["static", "live-dry-run", "copy", "T0", "T1", "T2", "T3"] },
+        "adapter_data": { "description": "Opaque adapter data needed by apply." },
+        "created_at": { "type": "string" },
+        "expires_at": { "type": "string" }
+      }
+    },
+    "receipt": {
+      "type": "object",
+      "required": ["id", "applied_at", "reversibility"],
+      "properties": {
+        "id": { "type": "string" },
+        "plan_hash": { "type": "string" },
+        "applied_at": { "type": "string" },
+        "output": { "type": "string" },
+        "rows_affected": { "type": "integer" },
+        "undo_handle": { "description": "Opaque adapter undo handle (before-images, prior definitions, trash names)." },
+        "reversibility": { "$ref": "#/$defs/reversibility" },
+        "warnings": { "type": "array", "items": { "type": "string" } }
+      }
+    },
+    "check": {
+      "type": "object",
+      "required": ["name", "passed"],
+      "properties": { "name": { "type": "string" }, "passed": { "type": "boolean" }, "detail": { "type": "string" } }
+    }
+  }
+}

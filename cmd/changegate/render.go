@@ -33,7 +33,9 @@ func decisionLine(c *model.Change) string {
 	return s
 }
 
-func renderChange(w io.Writer, c *model.Change) {
+func renderChange(w io.Writer, c *model.Change) { renderChangeOpts(w, c, true) }
+
+func renderChangeOpts(w io.Writer, c *model.Change, showNext bool) {
 	if c.Plan != nil {
 		fmt.Fprint(w, c.Plan.Diff)
 	}
@@ -41,6 +43,9 @@ func renderChange(w io.Writer, c *model.Change) {
 	fmt.Fprintf(w, "policy: %s\n", decisionLine(c))
 	if c.Error != "" {
 		fmt.Fprintf(w, "error: %s\n", c.Error)
+	}
+	if !showNext {
+		return
 	}
 	switch c.State {
 	case model.AutoApproved, model.Approved:

@@ -1,0 +1,14 @@
+# Two connections to the same data. The environment class is bound to the
+# connection: the agent cannot relabel production as personal.
+targets:
+  prod:
+    adapter: postgres
+    env: prod
+    dsn: postgres://postgres:demo@localhost:55499/saastr?sslmode=disable
+    sensitive: ["*.email"]
+  dev:
+    adapter: postgres
+    env: personal
+    dsn: postgres://postgres:demo@localhost:55499/saastr_dev?sslmode=disable
+default_target: dev
+policy: policy.yaml

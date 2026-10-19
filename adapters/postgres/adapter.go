@@ -324,6 +324,18 @@ func (b *planBuilder) dryRun(ctx context.Context, conn *pgx.Conn, stmts []*Stmt)
 	for i, s := range stmts {
 		start := time.Now()
 		step := planStep{SQL: s.Text, Kind: s.Kind, Category: s.Category, Rel: RelName(s.Rel), Reversibility: adapter.Reversible}
+		if unsafeToDryRun(s) {
+			// Effects outside the transaction (terminating backends, dblink,
+			// server files, arbitrary code) would happen even though the dry
+			// run rolls back, so these statements are never executed here.
+			step.Reversibility, step.Capture = adapter.Irreversible, CaptureNone
+			b.worst(adapter.Irreversible)
+			b.data.Steps = append(b.data.Steps, step)
+			b.plan.Destructive = true
+			b.warn(fmt.Sprintf("#%d %s has effects outside the transaction; it was not executed in the dry run and cannot be undone", i+1, s.Kind))
+			fmt.Fprintf(&b.diff, "#%d %s (not dry-run: effects outside the transaction)\n", i+1, firstLine(s.Text))
+			continue
+		}
 		var err error
 		switch s.Category {
 		case CatDML:
@@ -361,6 +373,11 @@ func (b *planBuilder) dryRun(ctx context.Context, conn *pgx.Conn, stmts []*Stmt)
 	if err != nil {
 		return err
 	}
+	for rel, mode := range b.locks {
+		if lockRank(mode) > lockRank(locks[rel]) {
+			locks[rel] = mode
+		}
+	}
 	var parts []string
 	maxMode := ""
 	for rel, mode := range locks {
@@ -380,6 +397,11 @@ func (b *planBuilder) dryRun(ctx context.Context, conn *pgx.Conn, stmts []*Stmt)
 	}
 	b.plan.Facts["dry_run_ms"] = fmt.Sprint(totalMs)
 	return nil
+}
+
+// unsafeToDryRun reports statements whose effects a rollback cannot undo.
+func unsafeToDryRun(s *Stmt) bool {
+	return s.HasFlag(FlagSideEffectFunction) || s.HasFlag(FlagServerFile) || s.HasFlag(FlagCodeBlock) || s.HasFlag(FlagProcedureCall)
 }
 
 func describePGError(n int, s *Stmt, err error) error {
@@ -541,6 +563,10 @@ func (b *planBuilder) planDDL(ctx context.Context, tx pgx.Tx, i int, s *Stmt, st
 			approx = ""
 		}
 		after, err := relfilenode(ctx, tx, rel.OID)
+		if err != nil {
+			// Dropped by this statement: pg_locks can no longer name it.
+			b.locks[rel.display()] = "AccessExclusiveLock"
+		}
 		rewrite := err == nil && after != fileBefore && after != 0
 		desc := fmt.Sprintf("%s on %s (%s%d rows)", s.Kind, rel.display(), approx, rows)
 		if rewrite {

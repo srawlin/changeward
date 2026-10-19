@@ -656,6 +656,11 @@ func rehearseCommands(ctx context.Context, conn *pgx.Conn, dsn string, o Rehears
 			r.RollbackDiff = d
 			r.Reversibility = adapter.Irreversible
 			r.Notes = append(r.Notes, "up → down → up does not reproduce the same schema")
+		} else if len(r.Effects) == 0 {
+			// The down command changed nothing, so the rollback is unconfirmed
+			// (or the migrations are data-only, which this mode cannot compare).
+			r.Reversibility = adapter.CheckpointOnly
+			r.Notes = append(r.Notes, "the down command made no schema change; rollback could not be confirmed")
 		} else {
 			r.Reversibility = adapter.Reversible
 		}
