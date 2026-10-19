@@ -16,8 +16,8 @@ import (
 // Decision is a hook verdict.
 type Decision struct {
 	// Permission is "allow", "deny" or "ask".
-	Permission string
-	Reason     string
+	Permission string `json:"permission"`
+	Reason     string `json:"reason,omitempty"`
 }
 
 // Target is what the hook knows about a registered target.

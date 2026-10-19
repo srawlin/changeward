@@ -1,6 +1,7 @@
 package main
 
 import (
+	_ "embed"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -309,7 +310,7 @@ func installCmd() *cobra.Command {
 	var target string
 	cmd := &cobra.Command{
 		Use:   "install AGENT",
-		Short: "Install Changegate into a coding agent (claude-code, cursor, gemini, codex, agents-md)",
+		Short: "Install Changegate into a coding agent (claude-code, codex, cursor, gemini, opencode, agents-md)",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(_ *cobra.Command, args []string) error {
 			a, err := newApp()
@@ -425,6 +426,26 @@ func installCmd() *cobra.Command {
 					return err
 				}
 				fmt.Println("added the Changegate section to", p)
+			case "opencode":
+				p := filepath.Join(a.cfg.Dir, "opencode.json")
+				if err := mergeJSON(p, func(m map[string]any) {
+					if _, ok := m["$schema"]; !ok {
+						m["$schema"] = "https://opencode.ai/config.json"
+					}
+					sub(m, "mcp")["changegate"] = map[string]any{"type": "local", "command": append([]string{exe}, serverArgs...),
+						"environment": map[string]any{"CHANGEGATE_AGENT": "opencode"}, "enabled": true}
+				}); err != nil {
+					return err
+				}
+				pp := filepath.Join(a.cfg.Dir, ".opencode", "plugins", "changegate.ts")
+				if err := os.MkdirAll(filepath.Dir(pp), 0o755); err != nil {
+					return err
+				}
+				src := strings.Replace(opencodePlugin, "__CHANGEGATE_BIN__", strings.ReplaceAll(exe, `"`, `\"`), 1)
+				if err := os.WriteFile(pp, []byte(src), 0o644); err != nil {
+					return err
+				}
+				fmt.Println("wrote", p, "(MCP server \"changegate\") and", pp, "(blocks direct shell changes)")
 			case "codex":
 				p := filepath.Join(a.cfg.Dir, ".codex", "config.toml")
 				block := fmt.Sprintf("%s\n[mcp_servers.changegate]\ncommand = %q\nargs = %s\nenv = { CHANGEGATE_AGENT = \"codex\" }\n\n"+
@@ -436,7 +457,7 @@ func installCmd() *cobra.Command {
 				fmt.Println("wrote", p, "(MCP server \"changegate\" and a PreToolUse hook)")
 				fmt.Println("Codex loads project config only for trusted projects; open Codex here, trust the project and approve the hook in /hooks")
 			default:
-				return fmt.Errorf("unknown agent %q (claude-code, cursor, gemini, codex, agents-md)", args[0])
+				return fmt.Errorf("unknown agent %q (claude-code, codex, cursor, gemini, opencode, agents-md)", args[0])
 			}
 			return nil
 		},
@@ -469,6 +490,9 @@ func firstWord(s string) string {
 	}
 	return s
 }
+
+//go:embed opencode_plugin.ts
+var opencodePlugin string
 
 const (
 	codexBegin = "# >>> changegate (managed by `changegate install codex`)"
