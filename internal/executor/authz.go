@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"path"
 	"strings"
 
 	"github.com/srawlin/changegate/adapters/mysql"
@@ -28,7 +29,8 @@ type AuthzDecision struct {
 }
 
 type rpcRequest struct {
-	Method string `json:"method"`
+	ID     json.RawMessage `json:"id,omitempty"`
+	Method string          `json:"method"`
 	Params struct {
 		Name      string         `json:"name"`
 		Arguments map[string]any `json:"arguments"`
@@ -41,7 +43,13 @@ type rpcRequest struct {
 //	x-changegate-server  logical name of the upstream MCP server (default "mcp")
 //	x-changegate-env     environment class of the upstream (default "prod")
 //	x-changegate-agent   agent identity, if the gateway knows it
+//	x-changegate-read-only-tools  comma-separated globs of tools that only read (allowed and audited)
 func (s *Server) authzMCP(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		w.Header().Set("x-changegate-decision", "allow")
+		writeJSON(w, http.StatusOK, AuthzDecision{Allow: true, Reason: "not a tool call"})
+		return
+	}
 	body, err := io.ReadAll(io.LimitReader(r.Body, 4<<20))
 	if err != nil {
 		writeJSON(w, http.StatusForbidden, AuthzDecision{Reason: "unreadable request"})
@@ -54,12 +62,29 @@ func (s *Server) authzMCP(w http.ResponseWriter, r *http.Request) {
 	}
 	d := s.decideTool(r, header(r, "x-changegate-server", "mcp"), header(r, "x-changegate-env", adapter.EnvProd),
 		header(r, "x-changegate-agent", "agent:via-gateway"), req.Params.Name, req.Params.Arguments)
-	code := http.StatusOK
-	if !d.Allow {
-		code = http.StatusForbidden
-	}
 	w.Header().Set("x-changegate-decision", map[bool]string{true: "allow", false: "deny"}[d.Allow])
-	writeJSON(w, code, d)
+	if d.Allow {
+		writeJSON(w, http.StatusOK, d)
+		return
+	}
+	// Gateways relay a denial's body to the MCP client, so it is also a
+	// JSON-RPC error for the call: the agent sees why it was blocked.
+	writeJSON(w, http.StatusForbidden, rpcDenial{JSONRPC: "2.0", ID: req.ID,
+		Error: rpcError{Code: -32001, Message: "Changegate: " + d.Reason, Data: d}, AuthzDecision: d})
+}
+
+type rpcError struct {
+	Code    int           `json:"code"`
+	Message string        `json:"message"`
+	Data    AuthzDecision `json:"data"`
+}
+
+// rpcDenial is a denial that is both a JSON-RPC error and an AuthzDecision.
+type rpcDenial struct {
+	JSONRPC string          `json:"jsonrpc"`
+	ID      json.RawMessage `json:"id,omitempty"`
+	Error   rpcError        `json:"error"`
+	AuthzDecision
 }
 
 // authzTool is the same decision for plugin-style gateways (e.g. ContextForge)
@@ -129,8 +154,13 @@ func (s *Server) decideTool(r *http.Request, server, env, agent, tool string, ar
 			return AuthzDecision{Reason: "SQL writes must go through Changegate (propose_change → apply_change) for a preview, policy check and undo; this direct call was blocked"}
 		}
 	}
-	// Approval-only handling for other tools: record a decision, never apply here.
 	argsJSON, _ := json.Marshal(args)
+	if readOnlyTool(r.Header.Get("x-changegate-read-only-tools"), tool) {
+		_ = s.Engine.Store.AppendEvent(r.Context(), &model.Event{Type: "gateway.read", Actor: agent,
+			Reason: fmt.Sprintf("%s on %s (%s): declared read-only by the gateway", tool, server, env), Data: argsJSON})
+		return AuthzDecision{Allow: true, Reason: "read-only tool"}
+	}
+	// Approval-only handling for other tools: record a decision, never apply here.
 	t := adapter.Target{Name: "mcp:" + server, Adapter: "mcp-gateway", Env: env}
 	plan := &adapter.Plan{Adapter: "mcp-gateway", Target: t.Name, Env: env, Reversibility: adapter.Irreversible, Destructive: true, BlastRows: 1,
 		Operation: adapter.Operation{Kind: "mcp-tool", Payload: string(argsJSON), Params: map[string]string{"tool": tool}}, RehearsalTier: "static",
@@ -146,6 +176,21 @@ func (s *Server) decideTool(r *http.Request, server, env, agent, tool string, ar
 		return AuthzDecision{Allow: true, Reason: "allowed by policy (" + strings.Join(d.Rules, ", ") + ")"}
 	}
 	return AuthzDecision{Reason: fmt.Sprintf("%s requires %s: %s", tool, map[string]string{"deny": "a policy exception", "require": "approval"}[d.Decision], strings.Join(d.Reasons, "; "))}
+}
+
+// readOnlyTool matches tool against the gateway operator's comma-separated
+// glob list (x-changegate-read-only-tools, e.g. "echo,get-*,list_*"). The
+// gateway sets this header itself; it must not forward a client's copy.
+func readOnlyTool(globs, tool string) bool {
+	for _, g := range strings.Split(globs, ",") {
+		if g = strings.TrimSpace(g); g == "" {
+			continue
+		}
+		if ok, _ := path.Match(g, tool); ok {
+			return true
+		}
+	}
+	return false
 }
 
 func allRead(st []*postgres.Stmt) bool {

@@ -209,8 +209,10 @@ func (s *Server) Handler() http.Handler {
 		return s.local(r).ApproveInline(r.Context(), c.ID, in.PlanHash, in.Approved, in.Channel)
 	})
 	// Gateway authorization (agentgateway extAuthz, Envoy ext_authz, ContextForge plugin).
-	mux.HandleFunc("POST /v1/authz/mcp", s.auth(s.authzMCP))
-	mux.HandleFunc("POST /v1/authz/mcp/", s.auth(s.authzMCP)) // Envoy appends the original path
+	// Any method: Envoy ext_authz forwards the client's own method, and MCP
+	// clients also send GET (SSE stream) and DELETE (end session).
+	mux.HandleFunc("/v1/authz/mcp", s.auth(s.authzMCP))
+	mux.HandleFunc("/v1/authz/mcp/", s.auth(s.authzMCP)) // Envoy appends the original path
 	mux.HandleFunc("POST /v1/authz/tool", s.auth(s.authzTool))
 	// GitOps gate (Argo CD PreSync hooks, CI on GitOps repositories).
 	h("POST /v1/gitops/gate", RolePropose, func(_ http.ResponseWriter, r *http.Request) (any, error) {

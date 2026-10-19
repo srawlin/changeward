@@ -24,7 +24,9 @@ func TestGitOpsGateOverExecutor(t *testing.T) {
 	}
 	ns := fmt.Sprintf("cg-gate-%d", time.Now().UnixNano())
 	_ = exec.Command("kubectl", "--context=kind-changegate", "create", "ns", ns).Run()
-	defer func() { _ = exec.Command("kubectl", "--context=kind-changegate", "delete", "ns", ns, "--wait=false").Run() }()
+	defer func() {
+		_ = exec.Command("kubectl", "--context=kind-changegate", "delete", "ns", ns, "--wait=false").Run()
+	}()
 	ctx := context.Background()
 	dir := t.TempDir()
 	st, _ := store.OpenSQLite(filepath.Join(dir, "cg.db"))
