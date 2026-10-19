@@ -29,12 +29,18 @@ type Target struct {
 	Options   map[string]string `yaml:"options,omitempty"`
 }
 
-// Slack configures Slack approvals.
+// Slack configures Slack approvals. Values support ${VAR}.
 type Slack struct {
-	WebhookURL    string `yaml:"webhook_url,omitempty"`
+	// WebhookURL posts notifications only (approve with the CLI).
+	WebhookURL string `yaml:"webhook_url,omitempty"`
+	// BotToken + Channel post interactive Approve/Reject messages; Slack sends
+	// clicks to `changegate serve` (/slack/interactions), verified with SigningSecret.
 	BotToken      string `yaml:"bot_token,omitempty"`
 	Channel       string `yaml:"channel,omitempty"`
 	SigningSecret string `yaml:"signing_secret,omitempty"`
+	// Users maps Slack user IDs to Changegate identities (user:<name>), so
+	// separation of duties compares like with like.
+	Users map[string]string `yaml:"users,omitempty"`
 }
 
 // Approvals configures approval channels.
@@ -159,6 +165,9 @@ func (c *Config) StateDir() string { return filepath.Dir(c.StorePath()) }
 
 // PolicyPath returns the policy file path, or "" for built-in defaults only.
 func (c *Config) PolicyPath() string {
+	if p := os.Getenv("CHANGEGATE_POLICY"); p != "" {
+		return p
+	}
 	if c.Policy != "" {
 		if filepath.IsAbs(c.Policy) {
 			return c.Policy

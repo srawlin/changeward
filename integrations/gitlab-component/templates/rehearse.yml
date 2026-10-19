@@ -1,0 +1,60 @@
+spec:
+  inputs:
+    version:
+      default: latest
+    stage:
+      default: test
+    postgres-version:
+      default: "18"
+    synthetic-rows:
+      default: "1000"
+    environment:
+      default: prod
+    framework:
+      default: ""
+    migrations-dir:
+      default: ""
+    mode:
+      default: report
+      options: [report, gate, deny-only]
+---
+changegate-rehearse:
+  stage: $[[ inputs.stage ]]
+  image: alpine:3.20
+  services:
+    - name: postgres:$[[ inputs.postgres-version ]]-alpine
+      alias: changegate-pg
+  variables:
+    POSTGRES_PASSWORD: changegate
+    CHANGEGATE_REHEARSAL_DSN: postgres://postgres:changegate@changegate-pg:5432/postgres?sslmode=disable
+    GIT_DEPTH: "0"
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+  before_script:
+    - apk add --no-cache curl git tar coreutils bash >/dev/null
+    - |
+      arch=$(uname -m); case "$arch" in x86_64) arch=amd64;; aarch64) arch=arm64;; esac
+      v="$[[ inputs.version ]]"
+      if [ "$v" = "latest" ]; then base="https://github.com/changegate/changegate/releases/latest/download"; else base="https://github.com/changegate/changegate/releases/download/$v"; fi
+      curl -fsSL "$base/changegate_linux_${arch}.tar.gz" -o /tmp/cg.tgz
+      curl -fsSL "$base/checksums.txt" -o /tmp/checksums.txt
+      (cd /tmp && grep " changegate_linux_${arch}.tar.gz\$" checksums.txt | sed "s| changegate_linux_${arch}.tar.gz| cg.tgz|" | sha256sum -c -)
+      tar -xzf /tmp/cg.tgz -C /usr/local/bin changegate
+  script:
+    - git fetch --no-tags origin "$CI_MERGE_REQUEST_TARGET_BRANCH_NAME"
+    - |
+      set +e
+      args="--base-ref origin/$CI_MERGE_REQUEST_TARGET_BRANCH_NAME --env $[[ inputs.environment ]] --synthetic $[[ inputs.synthetic-rows ]] --out changegate-evidence.json"
+      [ -n "$[[ inputs.framework ]]" ] && args="$args --framework $[[ inputs.framework ]]"
+      [ -n "$[[ inputs.migrations-dir ]]" ] && args="$args --migrations-dir $[[ inputs.migrations-dir ]]"
+      changegate rehearse $args > changegate-report.md; code=$?
+      cat changegate-report.md
+      [ "$code" -gt 1 ] && exit "$code"
+      if [ -n "${CHANGEGATE_GITLAB_TOKEN:-}${GITLAB_TOKEN:-}" ]; then changegate report changegate-evidence.json --gitlab --status || true; fi
+      changegate gate changegate-evidence.json; g=$?
+      case "$[[ inputs.mode ]]:$g" in
+        report:*) exit 0 ;; gate:0) exit 0 ;; gate:*) exit 1 ;; deny-only:3|deny-only:1) exit 1 ;; *) exit 0 ;;
+      esac
+  artifacts:
+    when: always
+    paths: [changegate-evidence.json, changegate-report.md]

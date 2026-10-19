@@ -1,0 +1,159 @@
+name: Changegate rehearse
+description: Rehearse database migrations in pull requests (forward → rollback → compare), report effects and reversibility, and gate on policy.
+author: Changegate
+branding:
+  icon: shield
+  color: blue
+
+inputs:
+  version:
+    description: Changegate version to install (a release tag such as v0.1.0, or "source" to build with Go).
+    default: latest
+  database-url:
+    description: Admin DSN of a scratch Postgres server Changegate may CREATE DATABASE on. If empty, the action starts Postgres in Docker.
+    default: ""
+  postgres-version:
+    description: Postgres major version to start when database-url is empty.
+    default: "18"
+  base-ref:
+    description: Base ref; migrations changed since it are rehearsed. Defaults to the PR base branch.
+    default: ""
+  framework:
+    description: Migration framework (default detected).
+    default: ""
+  migrations-dir:
+    description: Migrations directory relative to the repository root (default detected).
+    default: ""
+  synthetic-rows:
+    description: Synthetic rows per table for a T1 rehearsal (0 = schema-only T0).
+    default: "1000"
+  environment:
+    description: Environment class the change deploys to, for policy (personal, shared-dev, staging, prod, prod-restricted).
+    default: prod
+  policy:
+    description: Path to a policy file (default changegate.policy.yaml if present, else built-in defaults).
+    default: ""
+  mode:
+    description: "report: never fail the job; gate: fail when review is required or the change is denied; deny-only: fail only when denied."
+    default: report
+  comment:
+    description: Post (or update) the report as a PR comment.
+    default: "true"
+  up-cmd:
+    description: Code-based frameworks only (Rails, Django, Alembic) - command that migrates to head.
+    default: ""
+  down-cmd:
+    description: Code-based frameworks only - command that rolls back {n} migrations.
+    default: ""
+  github-token:
+    description: Token for PR comments and commit statuses.
+    default: ${{ github.token }}
+
+outputs:
+  decision:
+    description: approve, require or deny.
+    value: ${{ steps.gate.outputs.decision }}
+  approvers:
+    description: Required approvers, comma separated.
+    value: ${{ steps.gate.outputs.approvers }}
+  evidence:
+    description: Path to the evidence JSON.
+    value: ${{ steps.rehearse.outputs.evidence }}
+
+runs:
+  using: composite
+  steps:
+    - name: Install changegate
+      shell: bash
+      env:
+        CG_VERSION: ${{ inputs.version }}
+      run: |
+        set -euo pipefail
+        bin="$RUNNER_TEMP/changegate-bin"; mkdir -p "$bin"
+        if [ "$CG_VERSION" = "source" ]; then
+          GOBIN="$bin" go install github.com/changegate/changegate/cmd/changegate@latest
+        else
+          os=$(uname -s | tr '[:upper:]' '[:lower:]'); arch=$(uname -m)
+          case "$arch" in x86_64) arch=amd64;; aarch64|arm64) arch=arm64;; esac
+          if [ "$CG_VERSION" = "latest" ]; then base="https://github.com/changegate/changegate/releases/latest/download"
+          else base="https://github.com/changegate/changegate/releases/download/$CG_VERSION"; fi
+          asset="changegate_${os}_${arch}.tar.gz"
+          curl -fsSL "$base/$asset" -o "$RUNNER_TEMP/$asset"
+          curl -fsSL "$base/checksums.txt" -o "$RUNNER_TEMP/checksums.txt"
+          (cd "$RUNNER_TEMP" && grep " $asset\$" checksums.txt | sha256sum -c -)
+          tar -xzf "$RUNNER_TEMP/$asset" -C "$bin" changegate
+        fi
+        echo "$bin" >> "$GITHUB_PATH"
+
+    - name: Start Postgres
+      if: inputs.database-url == ''
+      shell: bash
+      env:
+        PGV: ${{ inputs.postgres-version }}
+      run: |
+        set -euo pipefail
+        docker run -d --name changegate-pg -e POSTGRES_PASSWORD=changegate -p 55432:5432 "postgres:${PGV}-alpine" >/dev/null
+        for i in $(seq 1 60); do docker exec changegate-pg pg_isready -U postgres >/dev/null 2>&1 && break; sleep 1; done
+        echo "CHANGEGATE_REHEARSAL_DSN=postgres://postgres:changegate@localhost:55432/postgres?sslmode=disable" >> "$GITHUB_ENV"
+
+    - name: Rehearse
+      id: rehearse
+      shell: bash
+      env:
+        INPUT_DSN: ${{ inputs.database-url }}
+        INPUT_BASE: ${{ inputs.base-ref }}
+        INPUT_FRAMEWORK: ${{ inputs.framework }}
+        INPUT_DIR: ${{ inputs.migrations-dir }}
+        INPUT_ROWS: ${{ inputs.synthetic-rows }}
+        INPUT_ENV: ${{ inputs.environment }}
+        INPUT_POLICY: ${{ inputs.policy }}
+        INPUT_UP: ${{ inputs.up-cmd }}
+        INPUT_DOWN: ${{ inputs.down-cmd }}
+        BASE_REF: ${{ github.base_ref }}
+      run: |
+        set -uo pipefail
+        base="${INPUT_BASE:-}"
+        if [ -z "$base" ] && [ -n "${BASE_REF:-}" ]; then
+          git fetch --no-tags --depth=200 origin "$BASE_REF" >/dev/null 2>&1 || true
+          base="origin/$BASE_REF"
+        fi
+        [ -z "$base" ] && base="HEAD~1"
+        [ -n "$INPUT_DSN" ] && export CHANGEGATE_REHEARSAL_DSN="$INPUT_DSN"
+        [ -n "$INPUT_POLICY" ] && export CHANGEGATE_POLICY="$INPUT_POLICY"
+        args=(rehearse --base-ref "$base" --env "$INPUT_ENV" --synthetic "$INPUT_ROWS" --out "$RUNNER_TEMP/changegate-evidence.json")
+        [ -n "$INPUT_FRAMEWORK" ] && args+=(--framework "$INPUT_FRAMEWORK")
+        [ -n "$INPUT_DIR" ] && args+=(--migrations-dir "$INPUT_DIR")
+        [ -n "$INPUT_UP" ] && args+=(--up-cmd "$INPUT_UP")
+        [ -n "$INPUT_DOWN" ] && args+=(--down-cmd "$INPUT_DOWN")
+        changegate "${args[@]}" > "$RUNNER_TEMP/changegate-report.md"
+        code=$?
+        echo "evidence=$RUNNER_TEMP/changegate-evidence.json" >> "$GITHUB_OUTPUT"
+        echo "rehearse_exit=$code" >> "$GITHUB_OUTPUT"
+        cat "$RUNNER_TEMP/changegate-report.md"
+        if [ "$code" -gt 1 ]; then exit "$code"; fi
+
+    - name: Report
+      if: inputs.comment == 'true' && github.event_name == 'pull_request'
+      shell: bash
+      env:
+        GITHUB_TOKEN: ${{ inputs.github-token }}
+      run: changegate report "${{ steps.rehearse.outputs.evidence }}" --github --status || echo "::warning::could not post the Changegate report (token permissions: pull-requests: write, statuses: write)"
+
+    - name: Gate
+      id: gate
+      shell: bash
+      env:
+        MODE: ${{ inputs.mode }}
+        INPUT_POLICY: ${{ inputs.policy }}
+      run: |
+        set -uo pipefail
+        [ -n "$INPUT_POLICY" ] && export CHANGEGATE_POLICY="$INPUT_POLICY"
+        changegate gate "${{ steps.rehearse.outputs.evidence }}"
+        code=$?
+        case "$MODE:$code" in
+          report:*) exit 0 ;;
+          gate:0) exit 0 ;;
+          gate:*) echo "::error::Changegate gate: review required or denied (exit $code)"; exit 1 ;;
+          deny-only:3|deny-only:1) echo "::error::Changegate gate: denied or rehearsal failed"; exit 1 ;;
+          *) exit 0 ;;
+        esac

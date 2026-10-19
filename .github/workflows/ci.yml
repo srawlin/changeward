@@ -1,0 +1,29 @@
+name: ci
+on:
+  push:
+    branches: [main]
+  pull_request:
+permissions:
+  contents: read
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    services:
+      pg18:
+        image: postgres:18-alpine
+        env: { POSTGRES_PASSWORD: pg }
+        ports: ["55418:5432"]
+        options: --health-cmd pg_isready --health-interval 2s --health-retries 30
+      pg16:
+        image: postgres:16-alpine
+        env: { POSTGRES_PASSWORD: pg }
+        ports: ["55416:5432"]
+        options: --health-cmd pg_isready --health-interval 2s --health-retries 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with: { go-version-file: go.mod }
+      - run: go vet ./...
+      - run: go test -race ./...
+      - uses: golangci/golangci-lint-action@v8
+        with: { version: v2.15.0 }

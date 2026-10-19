@@ -186,7 +186,7 @@ func openPR(root, branch, base string, s *model.Session, changes []*model.Change
 	if err := git(root, "commit", "-m", msg); err != nil {
 		return err
 	}
-	if _, lookErr := exec.LookPath("gh"); lookErr != nil {
+	if !onPath("gh") {
 		fmt.Printf("committed on %s; push it and open a PR (gh CLI not found)\n", branch)
 		return nil
 	}
@@ -214,4 +214,9 @@ func openPR(root, branch, base string, s *model.Session, changes []*model.Change
 	cmd.Dir = root
 	cmd.Stdout, cmd.Stderr = os.Stdout, os.Stderr
 	return cmd.Run()
+}
+
+func onPath(bin string) bool {
+	_, err := exec.LookPath(bin)
+	return err == nil
 }
