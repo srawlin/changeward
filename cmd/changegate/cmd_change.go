@@ -198,6 +198,10 @@ func operationKind(adapterName string) string {
 		return "kv"
 	case "kubernetes":
 		return "k8s"
+	case "configfile":
+		return "file"
+	case "httpapi":
+		return "http"
 	}
 	return adapterName
 }

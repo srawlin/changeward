@@ -7,6 +7,8 @@ import (
 	"os/user"
 	"sync"
 
+	"github.com/srawlin/changegate/adapters/configfile"
+	"github.com/srawlin/changegate/adapters/httpapi"
 	"github.com/srawlin/changegate/adapters/kubernetes"
 	"github.com/srawlin/changegate/adapters/mysql"
 	"github.com/srawlin/changegate/adapters/postgres"
@@ -115,6 +117,8 @@ func (a *app) registry() *registry {
 			"terraform":  terraform.New(a.cfg.StateDir()),
 			"kubernetes": kubernetes.New(),
 			"mysql":      mysql.New(),
+			"configfile": configfile.New(),
+			"httpapi":    httpapi.New(),
 		}, plugins: map[string]*adapter.Plugin{}}
 		a.closers = append(a.closers, a.reg.close)
 	}
