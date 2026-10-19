@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"io/fs"
 	"os"
 	"os/signal"
 	"path/filepath"
@@ -161,10 +162,9 @@ type claudeHookInput struct {
 
 func hookCmd() *cobra.Command {
 	cmd := &cobra.Command{Use: "hook", Short: "Coding-agent hooks (called by the agent, not by people)"}
-	claude := &cobra.Command{
-		Use:   "claude-code",
-		Short: "Claude Code PreToolUse hook: route direct database changes through Changegate",
-		RunE: func(*cobra.Command, []string) error {
+	// Claude Code and Codex share the PreToolUse wire format.
+	preToolUse := func(agent string) func(*cobra.Command, []string) error {
+		return func(*cobra.Command, []string) error {
 			b, err := io.ReadAll(os.Stdin)
 			if err != nil {
 				return err
@@ -183,7 +183,7 @@ func hookCmd() *cobra.Command {
 			if in.Cwd != "" {
 				_ = os.Chdir(in.Cwd)
 			}
-			d := evaluateHook(ti.Command, "claude-code", in.SessionID)
+			d := evaluateHook(ti.Command, agent, in.SessionID)
 			if d.Permission == "allow" {
 				return nil
 			}
@@ -191,8 +191,10 @@ func hookCmd() *cobra.Command {
 				"hookEventName": "PreToolUse", "permissionDecision": d.Permission,
 				"permissionDecisionReason": "Changegate: " + d.Reason,
 			}})
-		},
+		}
 	}
+	claude := &cobra.Command{Use: "claude-code", Short: "Claude Code PreToolUse hook: route direct database changes through Changegate", RunE: preToolUse("claude-code")}
+	codex := &cobra.Command{Use: "codex", Short: "Codex PreToolUse hook (same wire format as Claude Code)", RunE: preToolUse("codex")}
 	generic := &cobra.Command{
 		Use:   "check COMMAND",
 		Short: "Evaluate a shell command for any agent; exit 2 means blocked",
@@ -269,7 +271,7 @@ func hookCmd() *cobra.Command {
 			return nil
 		},
 	}
-	cmd.AddCommand(claude, generic, cursor, gemini)
+	cmd.AddCommand(claude, codex, generic, cursor, gemini)
 	return cmd
 }
 
@@ -424,7 +426,15 @@ func installCmd() *cobra.Command {
 				}
 				fmt.Println("added the Changegate section to", p)
 			case "codex":
-				fmt.Printf("add to ~/.codex/config.toml:\n\n[mcp_servers.changegate]\ncommand = %q\nargs = %s\nenv = { CHANGEGATE_AGENT = \"codex\" }\n", exe, tomlList(serverArgs))
+				p := filepath.Join(a.cfg.Dir, ".codex", "config.toml")
+				block := fmt.Sprintf("%s\n[mcp_servers.changegate]\ncommand = %q\nargs = %s\nenv = { CHANGEGATE_AGENT = \"codex\" }\n\n"+
+					"[[hooks.PreToolUse]]\nmatcher = \"^Bash$\"\n\n[[hooks.PreToolUse.hooks]]\ntype = \"command\"\ncommand = %q\ntimeout = 30\n%s\n",
+					codexBegin, exe, tomlList(serverArgs), exe+" hook codex", codexEnd)
+				if err := writeMarkedBlock(p, block); err != nil {
+					return err
+				}
+				fmt.Println("wrote", p, "(MCP server \"changegate\" and a PreToolUse hook)")
+				fmt.Println("Codex loads project config only for trusted projects; open Codex here, trust the project and approve the hook in /hooks")
 			default:
 				return fmt.Errorf("unknown agent %q (claude-code, cursor, gemini, codex, agents-md)", args[0])
 			}
@@ -458,6 +468,40 @@ func firstWord(s string) string {
 		}
 	}
 	return s
+}
+
+const (
+	codexBegin = "# >>> changegate (managed by `changegate install codex`)"
+	codexEnd   = "# <<< changegate"
+)
+
+// writeMarkedBlock replaces the block between codexBegin and codexEnd in p,
+// or appends it, keeping the rest of the file.
+func writeMarkedBlock(p, block string) error {
+	b, err := os.ReadFile(p)
+	if err != nil && !errors.Is(err, fs.ErrNotExist) {
+		return err
+	}
+	s := string(b)
+	if i := strings.Index(s, codexBegin); i >= 0 {
+		end := len(s)
+		if j := strings.Index(s[i:], codexEnd); j >= 0 {
+			end = i + j + len(codexEnd)
+			if end < len(s) && s[end] == '\n' {
+				end++
+			}
+		}
+		s = s[:i] + block + s[end:]
+	} else {
+		if s != "" && !strings.HasSuffix(s, "\n\n") {
+			s += "\n"
+		}
+		s += block
+	}
+	if err := os.MkdirAll(filepath.Dir(p), 0o755); err != nil {
+		return err
+	}
+	return os.WriteFile(p, []byte(s), 0o644)
 }
 
 func tomlList(xs []string) string {

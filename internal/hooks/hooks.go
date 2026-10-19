@@ -263,6 +263,13 @@ func evaluatePsql(raw string, args []string, targets []Target) Decision {
 		return Decision{"ask", fmt.Sprintf("interactive psql session against target %q bypasses Changegate", t.Name)}
 	}
 	for _, sql := range sqls {
+		if strings.HasPrefix(strings.TrimSpace(sql), `\`) {
+			if !psqlMetaReadOnly(sql) {
+				return Decision{"deny", fmt.Sprintf("psql meta-command %q against target %q can change it or run scripts outside Changegate. "+
+					"Use the changegate MCP tools (propose_change, then apply_change) or `changegate exec`.", strings.Fields(sql)[0], t.Name)}
+			}
+			continue
+		}
 		_, stmts, err := postgres.Classify(sql)
 		if err != nil {
 			return Decision{"deny", fmt.Sprintf("Changegate could not parse this SQL (%v); fix it and use `changegate exec` or the propose_change tool", err)}
@@ -276,6 +283,31 @@ func evaluatePsql(raw string, args []string, targets []Target) Decision {
 		}
 	}
 	return Decision{Permission: "allow"}
+}
+
+// psqlMetaReadOnly reports whether a -c string made only of psql
+// meta-commands (\d customers, \dt, \l ...) is read-only. Scripts (\i),
+// shell escapes (\!), \copy, \gexec and large-object writes are not; nor is
+// anything unknown.
+func psqlMetaReadOnly(s string) bool {
+	for _, part := range strings.Split(s, `\\`) { // "\\" separates commands
+		part = strings.TrimSpace(part)
+		if part == "" {
+			continue
+		}
+		if !strings.HasPrefix(part, `\`) {
+			return false // SQL mixed in after a separator: not just meta-commands
+		}
+		cmd := strings.TrimSuffix(strings.Fields(part)[0][1:], "+")
+		switch {
+		case strings.HasPrefix(cmd, "d") && cmd != "do", cmd == "l", cmd == "list", cmd == "z", cmd == "conninfo", cmd == "x",
+			cmd == "timing", cmd == "echo", cmd == "q", cmd == "?", cmd == "h", cmd == "help", cmd == "sf", cmd == "sv", cmd == "encoding",
+			cmd == "pset", cmd == "a", cmd == "t", cmd == "C", cmd == "f", cmd == "H":
+		default:
+			return false
+		}
+	}
+	return true
 }
 
 // matchTarget decides whether a psql connection refers to a registered
