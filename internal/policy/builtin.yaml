@@ -69,4 +69,4 @@ rules:
     decide: require
     channel: out-of-band
     approvers: ["owner:codeowners"]
-    reason: migration is destructive, not proven reversible, or failed rehearsal
+    reason: change is destructive, not proven reversible, or failed rehearsal
