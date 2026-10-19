@@ -134,8 +134,8 @@ runs:
         [ -n "$INPUT_DIR" ] && args+=(--migrations-dir "$INPUT_DIR")
         [ -n "$INPUT_UP" ] && args+=(--up-cmd "$INPUT_UP")
         [ -n "$INPUT_DOWN" ] && args+=(--down-cmd "$INPUT_DOWN")
-        changegate "${args[@]}" > "$RUNNER_TEMP/changegate-report.md"
-        code=$?
+        code=0
+        changegate "${args[@]}" > "$RUNNER_TEMP/changegate-report.md" || code=$?
         echo "evidence=$RUNNER_TEMP/changegate-evidence.json" >> "$GITHUB_OUTPUT"
         echo "rehearse_exit=$code" >> "$GITHUB_OUTPUT"
         cat "$RUNNER_TEMP/changegate-report.md"
@@ -159,8 +159,8 @@ runs:
       run: |
         set -uo pipefail
         [ -n "$INPUT_POLICY" ] && export CHANGEGATE_POLICY="$INPUT_POLICY"
-        changegate gate "${{ steps.rehearse.outputs.evidence }}"
-        code=$?
+        code=0
+        changegate gate "${{ steps.rehearse.outputs.evidence }}" || code=$?
         case "$MODE:$code" in
           report:*) exit 0 ;;
           gate:0) exit 0 ;;

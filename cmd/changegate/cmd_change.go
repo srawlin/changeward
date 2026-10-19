@@ -184,9 +184,20 @@ func (a *app) propose(ctx context.Context, f *planFlags, sql string) (*model.Cha
 		}
 	}
 	return eng.Propose(ctx, engine.ProposeRequest{
-		Target: t, Operation: adapter.Operation{Kind: "sql", Payload: sql, Intent: f.intent},
+		Target: t, Operation: adapter.Operation{Kind: operationKind(t.Adapter), Payload: sql, Intent: f.intent},
 		Principal: principal(), SessionID: sessID, Provenance: model.Provenance{Host: hostInfo()},
 	})
+}
+
+// operationKind maps an adapter to the operation kind the CLI submits.
+func operationKind(adapterName string) string {
+	switch adapterName {
+	case "postgres", "mysql":
+		return "sql"
+	case "toykv":
+		return "kv"
+	}
+	return adapterName
 }
 
 func hostInfo() string {

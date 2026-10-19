@@ -52,6 +52,9 @@ type Store interface {
 	GetChange(ctx context.Context, ref string) (*model.Change, error)
 	ListChanges(ctx context.Context, f ChangeFilter) ([]*model.Change, error)
 
+	SaveChangeset(ctx context.Context, cs *model.Changeset, e *model.Event) error
+	GetChangeset(ctx context.Context, id string) (*model.Changeset, error)
+
 	SaveCheckpoint(ctx context.Context, cp *model.Checkpoint, e *model.Event) error
 	GetCheckpoint(ctx context.Context, id string) (*model.Checkpoint, error)
 

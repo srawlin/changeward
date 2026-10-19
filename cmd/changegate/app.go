@@ -8,6 +8,7 @@ import (
 	"sync"
 
 	"github.com/srawlin/changegate/adapters/postgres"
+	"github.com/srawlin/changegate/adapters/terraform"
 	"github.com/srawlin/changegate/adapters/toykv"
 	"github.com/srawlin/changegate/internal/config"
 	"github.com/srawlin/changegate/internal/engine"
@@ -107,8 +108,9 @@ func (a *app) engine() (*engine.Engine, error) {
 func (a *app) registry() *registry {
 	if a.reg == nil {
 		a.reg = &registry{cfg: a.cfg, builtin: map[string]adapter.Adapter{
-			"postgres": postgres.New(postgres.Options{StateDir: a.cfg.StateDir()}),
-			"toykv":    toykv.New(),
+			"postgres":  postgres.New(postgres.Options{StateDir: a.cfg.StateDir()}),
+			"toykv":     toykv.New(),
+			"terraform": terraform.New(a.cfg.StateDir()),
 		}, plugins: map[string]*adapter.Plugin{}}
 		a.closers = append(a.closers, a.reg.close)
 	}

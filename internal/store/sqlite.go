@@ -33,6 +33,10 @@ CREATE TABLE IF NOT EXISTS changes (
 );
 CREATE INDEX IF NOT EXISTS changes_session ON changes(session_id, seq);
 CREATE INDEX IF NOT EXISTS changes_plan ON changes(plan_id);
+CREATE TABLE IF NOT EXISTS changesets (
+  id TEXT PRIMARY KEY,
+  doc TEXT NOT NULL
+);
 CREATE TABLE IF NOT EXISTS checkpoints (
   id TEXT PRIMARY KEY,
   session_id TEXT,
@@ -355,6 +359,31 @@ func (s *SQLite) ListChanges(ctx context.Context, f ChangeFilter) ([]*model.Chan
 		out = append(out, &c)
 	}
 	return out, nil
+}
+
+// SaveChangeset implements Store (insert or update).
+func (s *SQLite) SaveChangeset(ctx context.Context, cs *model.Changeset, e *model.Event) error {
+	doc, _ := json.Marshal(cs)
+	return s.tx(ctx, func(tx *sql.Tx) error {
+		if _, err := tx.ExecContext(ctx, `INSERT INTO changesets(id, doc) VALUES(?, ?) ON CONFLICT(id) DO UPDATE SET doc = excluded.doc`, cs.ID, string(doc)); err != nil {
+			return err
+		}
+		return appendEvent(ctx, tx, e)
+	})
+}
+
+// GetChangeset implements Store.
+func (s *SQLite) GetChangeset(ctx context.Context, id string) (*model.Changeset, error) {
+	var doc string
+	err := s.db.QueryRowContext(ctx, `SELECT doc FROM changesets WHERE id = ?`, id).Scan(&doc)
+	if errors.Is(err, sql.ErrNoRows) {
+		return nil, ErrNotFound
+	}
+	if err != nil {
+		return nil, err
+	}
+	var cs model.Changeset
+	return &cs, json.Unmarshal([]byte(doc), &cs)
 }
 
 // SaveCheckpoint implements Store.
