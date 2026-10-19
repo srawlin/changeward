@@ -70,6 +70,11 @@ func (s *Server) auth(next http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		h := r.Header.Get("Authorization")
 		tok := strings.TrimPrefix(h, "Bearer ")
+		if x := r.Header.Get("X-Changegate-Token"); x != "" {
+			// Gateways (Envoy ext_authz, agentgateway) forward the client's own
+			// Authorization header; they add Changegate's token here instead.
+			tok, h = x, ""
+		}
 		if tok == "" || tok == h {
 			writeErr(w, http.StatusUnauthorized, errors.New("missing bearer token"))
 			return
@@ -203,6 +208,10 @@ func (s *Server) Handler() http.Handler {
 		}
 		return s.local(r).ApproveInline(r.Context(), c.ID, in.PlanHash, in.Approved, in.Channel)
 	})
+	// Gateway authorization (agentgateway extAuthz, Envoy ext_authz, ContextForge plugin).
+	mux.HandleFunc("POST /v1/authz/mcp", s.auth(s.authzMCP))
+	mux.HandleFunc("POST /v1/authz/mcp/", s.auth(s.authzMCP)) // Envoy appends the original path
+	mux.HandleFunc("POST /v1/authz/tool", s.auth(s.authzTool))
 	// GitOps gate (Argo CD PreSync hooks, CI on GitOps repositories).
 	h("POST /v1/gitops/gate", RolePropose, func(_ http.ResponseWriter, r *http.Request) (any, error) {
 		var in struct {
