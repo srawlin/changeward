@@ -239,7 +239,7 @@ func hookCmd() *cobra.Command {
 	}
 	gemini := &cobra.Command{
 		Use:   "gemini",
-		Short: "Gemini CLI BeforeTool hook (shell commands); exit 2 blocks",
+		Short: "Gemini CLI BeforeTool hook (shell commands); prints {decision: deny}",
 		RunE: func(*cobra.Command, []string) error {
 			b, _ := io.ReadAll(os.Stdin)
 			var in struct {
@@ -264,12 +264,8 @@ func hookCmd() *cobra.Command {
 			if d.Permission == "allow" {
 				return nil
 			}
-			_ = printJSON(map[string]string{"decision": map[string]string{"deny": "deny", "ask": "ask"}[d.Permission], "reason": "Changegate: " + d.Reason})
-			if d.Permission == "deny" {
-				fmt.Fprintln(os.Stderr, "Changegate: "+d.Reason)
-				return exitError{code: 2}
-			}
-			return nil
+			// Exit 0 with a JSON decision (Gemini reports exit 2 as a failed hook).
+			return printJSON(map[string]string{"decision": map[string]string{"deny": "deny", "ask": "ask"}[d.Permission], "reason": "Changegate: " + d.Reason})
 		},
 	}
 	cmd.AddCommand(claude, codex, generic, cursor, gemini)
