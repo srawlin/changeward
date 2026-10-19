@@ -10,3 +10,4 @@ plugins:
       token_env: CHANGEGATE_GATEWAY_TOKEN
       env: prod
       fail_closed: true
+      read_only_tools: ["*-list-*", "*-get-*"]   # globs of tools that only read
