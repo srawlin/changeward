@@ -11,6 +11,7 @@ import (
 	"syscall"
 
 	"github.com/srawlin/changegate/adapters/postgres"
+	"github.com/srawlin/changegate/internal/executor"
 	"github.com/srawlin/changegate/internal/hooks"
 	"github.com/srawlin/changegate/internal/mcpproxy"
 	"github.com/srawlin/changegate/internal/mcpserver"
@@ -51,7 +52,7 @@ func (a *app) mcpServerFor(adapterName, target string, checkpoint, branch bool, 
 }
 
 func mcpCmd() *cobra.Command {
-	var target, sessionID string
+	var target, sessionID, executorURL string
 	var checkpoint, branch bool
 	cmd := &cobra.Command{
 		Use:   "mcp ADAPTER",
@@ -71,8 +72,20 @@ Add to an MCP client, e.g. Claude Code's .mcp.json:
 				return err
 			}
 			defer a.close()
-			s, err := a.mcpServerFor(args[0], target, checkpoint, branch, sessionID)
-			if err != nil {
+			if executorURL == "" {
+				executorURL = os.Getenv("CHANGEGATE_EXECUTOR_URL")
+			}
+			var s *mcpserver.Server
+			if executorURL != "" {
+				tok := os.Getenv("CHANGEGATE_EXECUTOR_TOKEN")
+				if tok == "" {
+					return errors.New("set CHANGEGATE_EXECUTOR_TOKEN to use a shared executor")
+				}
+				if target == "" {
+					return errors.New("--target names the executor's target")
+				}
+				s = &mcpserver.Server{Backend: executor.NewClient(executorURL, tok), Target: target, Checkpoint: checkpoint, Branch: branch, SessionID: sessionID, Version: version}
+			} else if s, err = a.mcpServerFor(args[0], target, checkpoint, branch, sessionID); err != nil {
 				return err
 			}
 			if s.Target == "" {
@@ -85,6 +98,7 @@ Add to an MCP client, e.g. Claude Code's .mcp.json:
 	}
 	cmd.Flags().StringVarP(&target, "target", "t", "", "target (default: the default target)")
 	cmd.Flags().StringVar(&sessionID, "session", "", "attach to an existing session instead of starting one")
+	cmd.Flags().StringVar(&executorURL, "executor", "", "use a shared executor at this URL ($CHANGEGATE_EXECUTOR_URL); token from $CHANGEGATE_EXECUTOR_TOKEN")
 	cmd.Flags().BoolVar(&checkpoint, "checkpoint", false, "checkpoint the target when the session starts")
 	cmd.Flags().BoolVar(&branch, "branch", false, "work on a private branch of the target")
 	return cmd

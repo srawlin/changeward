@@ -72,6 +72,19 @@ type Telemetry struct {
 	Headers      map[string]string `yaml:"headers,omitempty"` // values support ${VAR}
 }
 
+// ExecutorToken is an API token accepted by `changegate executor serve`
+// (only the SHA-256 is stored; create entries with `changegate executor token`).
+type ExecutorToken struct {
+	Name   string   `yaml:"name"`
+	SHA256 string   `yaml:"sha256"`
+	Roles  []string `yaml:"roles"`
+}
+
+// Executor configures the shared executor.
+type Executor struct {
+	Tokens []ExecutorToken `yaml:"tokens,omitempty"`
+}
+
 // Plugin is an out-of-process adapter.
 type Plugin struct {
 	Path string   `yaml:"path"`
@@ -88,6 +101,7 @@ type Config struct {
 	Adapters  map[string]Plugin `yaml:"adapters,omitempty"`
 	Signals   Signals           `yaml:"signals,omitempty"`
 	Telemetry Telemetry         `yaml:"telemetry,omitempty"`
+	Executor  Executor          `yaml:"executor,omitempty"`
 	// DefaultTarget is used when a command does not name one.
 	DefaultTarget string `yaml:"default_target,omitempty"`
 

@@ -34,5 +34,10 @@ jobs:
         with: { cluster_name: changegate }
       - run: go vet ./...
       - run: go test -race ./...
+      - name: SDK tests (Python, TypeScript) against a live executor
+        run: |
+          go build -o bin/changegate ./cmd/changegate
+          (cd sdk/python && PYTHONPATH=src python3 -m unittest -v tests.test_sdk)
+          (cd sdk/typescript && node --experimental-strip-types --test test/*.test.ts)
       - uses: golangci/golangci-lint-action@v8
         with: { version: v2.15.0 }
