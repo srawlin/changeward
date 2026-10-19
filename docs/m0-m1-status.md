@@ -32,7 +32,7 @@ runs on the toy adapter, in process and as a plugin binary (`changegate adapter 
 | Claude Code plugin and hooks | Done; hook tested | `changegate hook claude-code`, `changegate install claude-code`, `integrations/claude-code` plugin plus marketplace manifest. **Not verified by loading the plugin in Claude Code.** |
 | Sessions: `log` / `undo` / `rewind` | Done, tested | Dependency-aware undo; rewind with checkpoint fallback |
 | Branch-as-working-target (template DB, Neon) | Done, tested (Neon against a live project) | `TestNeonLive` covers checkpoint (LSN in the branch's history, no branch created), restore and branch copies (it runs when `NEON_*` env vars are set). Neon always keeps the pre-restore state as an ancestor branch, and the receipt names it. Template branching needs no other connections on the source (`allow_terminate` for personal targets). |
-| `promote` to migration files for 3 frameworks | Done for 10 | golang-migrate, goose, Flyway, Liquibase SQL, Atlas, Prisma, Sqitch, Rails, Django, Alembic. All writers are tested by writing and then re-detecting the result. End to end (session → promote → Lane A rehearsal) was run manually for golang-migrate. `--pr` uses git and gh but was **not run against GitHub**. |
+| `promote` to migration files for 3 frameworks | Done for 10 | golang-migrate, goose, Flyway, Liquibase SQL, Atlas, Prisma, Sqitch, Rails, Django, Alembic. All writers are tested by writing and then re-detecting the result. End to end (session → promote → Lane A rehearsal) was run manually for golang-migrate. `--pr` verified on GitHub (PR #2). |
 | Approvals: terminal, MCP elicitation, Slack | Done, tested | Elicitation uses MCP multi-round-trip input requests (protocol 2026-07-28; the SDK falls back for older clients). Slack: signed interactions and user mapping, tested against a fake Slack API. **Not tested against real Slack.** |
 
 ### Lane A (CI/CD)
@@ -42,8 +42,8 @@ runs on the toy adapter, in process and as a plugin binary (`changegate adapter 
 | Migration detection: Flyway, Liquibase, Atlas, Prisma, Rails, Django, Alembic, golang-migrate | Done, tested | Also goose and Sqitch. Liquibase XML/YAML changelogs are detected, but rehearsal needs the Liquibase CLI (command mode). |
 | Rehearsal on template DB / Neon branch | Done, tested; Neon run live (`rehearse --neon`, T3) | Per-migration forward → locks/rewrites/rows → down → catalog and data checksum compare; re-apply check; command mode for code frameworks (tested with psql standing in). Synthetic data generator (T1) respects types, NOT NULL and FKs, and scales from production `reltuples`. |
 | PR report | Done | Markdown with no row values; agent provenance (bots, trailers, branches) |
-| GitHub Action | Written, **not run on GitHub** | `integrations/github-action/action.yml` (composite). Comment and status posting is implemented against the REST API but untested against github.com. Needs a published release to download. |
-| GitLab component | Written, **not run on GitLab** | `integrations/gitlab-component/templates/rehearse.yml` |
+| GitHub Action | Done, verified on GitHub | The self-test workflow (`.github/workflows/changegate-selftest.yml`) runs the Action, built from the same commit (`version: local`), on PRs. PR #1 (lossy migration): report comment, `pending` status, review required. PR #2 (opened by `changegate promote --pr`): rehearsed reversible and auto-approved. Release-download installs need a published release. |
+| GitLab component | Written, **not run on GitLab** | `integrations/gitlab-component/templates/rehearse.yml`. The provided SSH key is not registered on the GitLab account yet, so nothing could be pushed. |
 
 ### Packaging, demo, benchmark
 

@@ -12,7 +12,8 @@ routed by risk and environment instead of by default.
   compare catalog and data checksums. The effect report is posted on the PR, and policy gates the merge or deploy.
 - **Promotion** turns a direct-lane session into a migration and a PR, so Git stays the source of truth.
 
-Postgres ships first. Status of the roadmap's M0 and M1 milestones: [docs/m0-m1-status.md](docs/m0-m1-status.md).
+Adapters: Postgres, MySQL, Kubernetes, Terraform/OpenTofu, NGINX/Traefik/HAProxy config files, REST APIs with
+compensation manifests. Status: [M0/M1](docs/m0-m1-status.md), [M2](docs/m2-status.md).
 
 ## Quick start: let an agent touch your database without fear
 
@@ -84,6 +85,20 @@ Detected frameworks: Flyway, Liquibase (formatted SQL), Atlas, Prisma, golang-mi
 directly. Rails, Django and Alembic run through `--up-cmd` / `--down-cmd`. Tiers: T0 schema replay, T1 synthetic
 data (optionally scaled from production `reltuples`), and T2/T3 via `--from-database` (golden image or clone) or
 `--neon`. Reports never contain row values. GitLab: [`integrations/gitlab-component`](integrations/gitlab-component).
+
+## Shared executor, SDKs and gateways
+
+- `changegate executor serve` runs next to the targets and holds their credentials. Agents' MCP servers
+  (`changegate mcp postgres --executor URL`), the [Python](sdk/python) and [TypeScript](sdk/typescript) SDKs and
+  GitOps gates call it with a bearer token whose identity is the delegating human. Deploy with the
+  [Helm chart](deploy/helm/changegate-executor) or the [systemd unit](deploy/systemd).
+- Gateways: `/v1/authz/mcp` for [agentgateway](integrations/agentgateway) and [Envoy ext_authz](integrations/envoy);
+  a [ContextForge plugin](integrations/contextforge).
+- GitOps: `changegate k8s gate` as an [Argo CD PreSync hook](integrations/argocd) or a CI check ([Flux](integrations/flux));
+  `changegate reconcile` and `changegate drift` keep Git the source of truth after direct changes.
+- Coding agents: `changegate install claude-code | cursor | gemini | codex | agents-md`.
+- `changegate changeset` applies ordered changes across systems as a saga; `changegate ui` is the local timeline;
+  OpenTelemetry export via `telemetry.otlp_endpoint`.
 
 ## Policy
 
