@@ -247,6 +247,10 @@ func (a *Adapter) priorConfig(ctx context.Context, dir string, current map[strin
 	return nil, ""
 }
 
+func isConfigFile(n string) bool {
+	return strings.HasSuffix(n, ".tf") || strings.HasSuffix(n, ".tfvars") || strings.HasSuffix(n, ".tf.json") || n == ".terraform.lock.hcl"
+}
+
 func snapshotConfig(dir string) (map[string]string, error) {
 	out := map[string]string{}
 	entries, err := os.ReadDir(dir)
@@ -255,7 +259,7 @@ func snapshotConfig(dir string) (map[string]string, error) {
 	}
 	for _, e := range entries {
 		n := e.Name()
-		if e.IsDir() || !(strings.HasSuffix(n, ".tf") || strings.HasSuffix(n, ".tfvars") || strings.HasSuffix(n, ".tf.json") || n == ".terraform.lock.hcl") {
+		if e.IsDir() || !isConfigFile(n) {
 			continue
 		}
 		b, err := os.ReadFile(filepath.Join(dir, n))

@@ -137,10 +137,17 @@ func evaluateOne(c, line string, targets []Target) Decision {
 		return evaluatePsql(c+" "+pipedPsql(line), w[1:], targets)
 	case "kubectl", "oc":
 		if len(w) > 1 && oneOf(w[1], "apply", "delete", "patch", "replace", "scale", "edit", "create", "rollout", "set", "label", "annotate", "drain", "cordon", "taint") {
-			return Decision{"ask", "kubectl " + w[1] + " changes a cluster directly; Changegate's Kubernetes adapter is not configured, so confirm manually"}
+			if t, ok := firstOf(targets, "kubernetes"); ok {
+				return Decision{"deny", fmt.Sprintf("kubectl %s changes the cluster without a preview or undo. Use Changegate instead: "+
+					"`changegate exec --target %s -f manifest.yaml` for apply, or `changegate exec --target %s \"delete deploy/NAME\"` / \"scale deploy/NAME --replicas=N\"", w[1], t.Name, t.Name)}
+			}
+			return Decision{"ask", "kubectl " + w[1] + " changes a cluster directly; no Kubernetes target is registered with Changegate, so confirm manually"}
 		}
 	case "terraform", "tofu":
 		if len(w) > 1 && oneOf(w[1], "apply", "destroy", "import", "state") {
+			if t, ok := firstOf(targets, "terraform"); ok && oneOf(w[1], "apply", "destroy") {
+				return Decision{"deny", fmt.Sprintf("%s %s bypasses Changegate's plan review and undo. Run `changegate exec --target %s %s` instead.", base(w[0]), w[1], t.Name, w[1])}
+			}
 			return Decision{"ask", base(w[0]) + " " + w[1] + " changes infrastructure directly; confirm manually (run plan first)"}
 		}
 	case "helm":
@@ -157,6 +164,15 @@ func evaluateOne(c, line string, targets []Target) Decision {
 		}
 	}
 	return Decision{Permission: "allow"}
+}
+
+func firstOf(targets []Target, adapterName string) (Target, bool) {
+	for _, t := range targets {
+		if t.Adapter == adapterName {
+			return t, true
+		}
+	}
+	return Target{}, false
 }
 
 func oneOf(s string, xs ...string) bool {

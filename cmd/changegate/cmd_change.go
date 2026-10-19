@@ -196,6 +196,8 @@ func operationKind(adapterName string) string {
 		return "sql"
 	case "toykv":
 		return "kv"
+	case "kubernetes":
+		return "k8s"
 	}
 	return adapterName
 }
