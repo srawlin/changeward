@@ -56,6 +56,9 @@ outputs:
   approvers:
     description: Required approvers, comma separated.
     value: ${{ steps.gate.outputs.approvers }}
+  reviewed:
+    description: '"true" when PR approvals satisfy a review-required decision.'
+    value: ${{ steps.gate.outputs.reviewed }}
   evidence:
     description: Path to the evidence JSON.
     value: ${{ steps.rehearse.outputs.evidence }}
@@ -142,7 +145,7 @@ runs:
         if [ "$code" -gt 1 ]; then exit "$code"; fi
 
     - name: Report
-      if: inputs.comment == 'true' && github.event_name == 'pull_request'
+      if: inputs.comment == 'true' && (github.event_name == 'pull_request' || github.event_name == 'pull_request_target' || github.event_name == 'pull_request_review')
       shell: bash
       env:
         GITHUB_TOKEN: ${{ inputs.github-token }}
@@ -156,11 +159,16 @@ runs:
       env:
         MODE: ${{ inputs.mode }}
         INPUT_POLICY: ${{ inputs.policy }}
+        GITHUB_TOKEN: ${{ inputs.github-token }}
+        IS_PR: ${{ github.event.pull_request.number != '' }}
       run: |
         set -uo pipefail
         [ -n "$INPUT_POLICY" ] && export CHANGEGATE_POLICY="$INPUT_POLICY"
+        args=(gate "${{ steps.rehearse.outputs.evidence }}")
+        # PR approvals that satisfy "review required" pass the gate (re-run on pull_request_review).
+        [ "$IS_PR" = "true" ] && args+=(--github)
         code=0
-        changegate gate "${{ steps.rehearse.outputs.evidence }}" || code=$?
+        changegate "${args[@]}" || code=$?
         case "$MODE:$code" in
           report:*) exit 0 ;;
           gate:0) exit 0 ;;

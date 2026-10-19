@@ -325,7 +325,11 @@ func installCmd() *cobra.Command {
 			if p, err := os.Executable(); err == nil {
 				exe = p
 			}
-			serverArgs := []string{"mcp", "postgres", "--target", target}
+			adapterName := "postgres"
+			if t, err := a.cfg.Resolve(target); err == nil && t.Adapter == "mysql" {
+				adapterName = "mysql"
+			}
+			serverArgs := []string{"mcp", adapterName, "--target", target}
 			switch args[0] {
 			case "claude-code":
 				mcpPath := filepath.Join(a.cfg.Dir, ".mcp.json")
