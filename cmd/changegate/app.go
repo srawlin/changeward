@@ -20,6 +20,7 @@ import (
 	"github.com/srawlin/changegate/internal/policy"
 	"github.com/srawlin/changegate/internal/signals"
 	"github.com/srawlin/changegate/internal/store"
+	"github.com/srawlin/changegate/internal/telemetry"
 	"github.com/srawlin/changegate/pkg/adapter"
 )
 
@@ -85,6 +86,17 @@ func (a *app) engine() (*engine.Engine, error) {
 	a.eng = &engine.Engine{Store: st, Adapters: a.registry(), Policy: pol, PlanTTL: a.cfg.TTL()}
 	if n := a.notifier(); n != nil {
 		a.eng.Notifier = n
+	}
+	endpoint := a.cfg.Telemetry.OTLPEndpoint
+	if endpoint == "" {
+		endpoint = os.Getenv("OTEL_EXPORTER_OTLP_ENDPOINT")
+	}
+	if endpoint != "" {
+		h := map[string]string{}
+		for k, v := range a.cfg.Telemetry.Headers {
+			h[k] = os.ExpandEnv(v)
+		}
+		a.eng.Observer = telemetry.NewExporter(os.ExpandEnv(endpoint), h)
 	}
 	if j := a.cfg.Signals.Jev; j != nil && j.Enabled {
 		key := os.ExpandEnv(j.APIKey)

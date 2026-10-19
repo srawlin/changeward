@@ -64,6 +64,14 @@ type Signals struct {
 	Jev *Jev `yaml:"jev,omitempty"`
 }
 
+// Telemetry configures export of change lifecycles to your OpenTelemetry
+// collector (OTLP/HTTP). Off unless an endpoint is set here or in
+// $OTEL_EXPORTER_OTLP_ENDPOINT.
+type Telemetry struct {
+	OTLPEndpoint string            `yaml:"otlp_endpoint,omitempty"`
+	Headers      map[string]string `yaml:"headers,omitempty"` // values support ${VAR}
+}
+
 // Plugin is an out-of-process adapter.
 type Plugin struct {
 	Path string   `yaml:"path"`
@@ -79,6 +87,7 @@ type Config struct {
 	Approvals Approvals         `yaml:"approvals,omitempty"`
 	Adapters  map[string]Plugin `yaml:"adapters,omitempty"`
 	Signals   Signals           `yaml:"signals,omitempty"`
+	Telemetry Telemetry         `yaml:"telemetry,omitempty"`
 	// DefaultTarget is used when a command does not name one.
 	DefaultTarget string `yaml:"default_target,omitempty"`
 
