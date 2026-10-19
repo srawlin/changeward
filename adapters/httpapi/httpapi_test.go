@@ -157,3 +157,81 @@ func TestHTTPCompensation(t *testing.T) {
 		t.Fatal("planning must not send requests that change state")
 	}
 }
+
+// GitHub-like API: large numeric ids, partial PATCH, and fields (updated_at,
+// comments) that change for reasons unrelated to the change being undone.
+func TestHTTPNumericIDsAndGuardedFields(t *testing.T) {
+	ctx := context.Background()
+	var mu sync.Mutex
+	issue := map[string]any{"number": 7, "title": "old", "body": "b", "state": "open", "comments": 0, "updated_at": "t0"}
+	deleted := ""
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		mu.Lock()
+		defer mu.Unlock()
+		var body map[string]any
+		_ = json.NewDecoder(r.Body).Decode(&body)
+		switch {
+		case r.Method == "GET" && r.URL.Path == "/issues/7":
+			_ = json.NewEncoder(w).Encode(issue)
+		case r.Method == "PATCH" && r.URL.Path == "/issues/7":
+			for k, v := range body {
+				issue[k] = v
+			}
+			issue["updated_at"] = "t-patch"
+			_ = json.NewEncoder(w).Encode(issue)
+		case r.Method == "POST" && r.URL.Path == "/issues/7/comments":
+			w.WriteHeader(201)
+			_, _ = w.Write([]byte(`{"id": 6274080425, "body": "hi"}`))
+		case r.Method == "DELETE" && strings.HasPrefix(r.URL.Path, "/comments/"):
+			deleted = strings.TrimPrefix(r.URL.Path, "/comments/")
+			w.WriteHeader(204)
+		default:
+			w.WriteHeader(404)
+		}
+	}))
+	defer srv.Close()
+	mp := filepath.Join(t.TempDir(), "gh.yaml")
+	_ = os.WriteFile(mp, []byte(`api: gh
+operations:
+  - match: {method: PATCH, path: "/issues/{number}"}
+    before: {method: GET, path: "/issues/{number}"}
+    inverse: {method: PATCH, path: "/issues/{number}", body: {title: "{before.title}", state: "{before.state}"}}
+  - match: {method: POST, path: "/issues/{number}/comments"}
+    inverse: {method: DELETE, path: "/comments/{response.id}"}
+`), 0o644)
+	tg := adapter.Target{Name: "gh", Adapter: "httpapi", Env: "personal", Config: map[string]string{"base_url": srv.URL, "manifest": mp}}
+	a := New()
+	p, err := a.Plan(ctx, tg, op("PATCH", "/issues/7", map[string]any{"title": "new"}))
+	if err != nil {
+		t.Fatal(err)
+	}
+	rc, err := a.Apply(ctx, tg, p)
+	if err != nil {
+		t.Fatal(err)
+	}
+	// A comment changes comments/updated_at but not the guarded fields.
+	cp, _ := a.Plan(ctx, tg, op("POST", "/issues/7/comments", map[string]any{"body": "hi"}))
+	crc, err := a.Apply(ctx, tg, cp)
+	if err != nil {
+		t.Fatal(err)
+	}
+	mu.Lock()
+	issue["comments"], issue["updated_at"] = 1, "t-comment"
+	mu.Unlock()
+	if _, err := a.Undo(ctx, tg, cp, crc); err != nil || deleted != "6274080425" {
+		t.Fatalf("undo comment: %v, deleted %q", err, deleted)
+	}
+	if _, err := a.Undo(ctx, tg, p, rc); err != nil || issue["title"] != "old" {
+		t.Fatalf("undo edit after unrelated churn: %v %v", err, issue)
+	}
+	// Drift in a guarded field still blocks.
+	p, _ = a.Plan(ctx, tg, op("PATCH", "/issues/7", map[string]any{"title": "new"}))
+	rc, _ = a.Apply(ctx, tg, p)
+	mu.Lock()
+	issue["state"] = "closed"
+	mu.Unlock()
+	var ce *adapter.ConflictError
+	if _, err := a.Undo(ctx, tg, p, rc); !errors.As(err, &ce) {
+		t.Fatalf("guarded drift must block undo: %v", err)
+	}
+}

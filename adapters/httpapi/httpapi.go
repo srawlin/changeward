@@ -64,6 +64,11 @@ type Rule struct {
 	Inverse       *Call                 `yaml:"inverse,omitempty"`
 	Reversibility adapter.Reversibility `yaml:"reversibility,omitempty"`
 	Description   string                `yaml:"description,omitempty"`
+	// Guard lists the top-level resource fields compared for drift (plan →
+	// apply → undo). Default: the fields the request writes plus the fields
+	// the inverse restores from {before.*}, so unrelated churn such as
+	// updated_at or counters does not block an undo.
+	Guard []string `yaml:"guard,omitempty"`
 }
 
 // Manifest is a compensation manifest.
@@ -176,7 +181,10 @@ func (vs vars) value(name string) (any, bool) {
 	return nil, false
 }
 
-var tmplRe = regexp.MustCompile(`\{([a-zA-Z0-9_.]+)\}`)
+var (
+	tmplRe        = regexp.MustCompile(`\{([a-zA-Z0-9_.]+)\}`)
+	beforeFieldRe = regexp.MustCompile(`\{before\.([a-zA-Z0-9_]+)`)
+)
 
 func (vs vars) expandString(s string) (string, error) {
 	var err error
@@ -245,8 +253,16 @@ func (vs vars) resolve(c *Call) (*Request, error) {
 func normalize(v any) any {
 	b, _ := json.Marshal(v)
 	var out any
-	_ = json.Unmarshal(b, &out)
+	_ = decodeJSON(b, &out)
 	return out
+}
+
+// decodeJSON unmarshals keeping numbers exact (json.Number): API ids such
+// as 6274080425 must not round-trip through float64 into paths.
+func decodeJSON(b []byte, v any) error {
+	d := json.NewDecoder(bytes.NewReader(b))
+	d.UseNumber()
+	return d.Decode(v)
 }
 
 // Adapter implements adapter.Adapter for HTTP APIs.
@@ -349,7 +365,7 @@ func (a *Adapter) do(ctx context.Context, t adapter.Target, r *Request) (*respon
 	out := &response{Status: resp.StatusCode}
 	if len(bytes.TrimSpace(rb)) > 0 {
 		var v any
-		if json.Unmarshal(rb, &v) == nil {
+		if decodeJSON(rb, &v) == nil {
 			out.Body = v
 		} else {
 			out.Body = string(rb)
@@ -371,6 +387,51 @@ func hashOf(v any) string {
 	return hex.EncodeToString(s[:])
 }
 
+// guardFields returns the fields compared for drift, or nil for the whole resource.
+func guardFields(rule *Rule, req Request) []string {
+	if rule == nil {
+		return nil
+	}
+	if len(rule.Guard) > 0 {
+		return rule.Guard
+	}
+	seen := map[string]bool{}
+	if m, ok := req.Body.(map[string]any); ok {
+		for k := range m {
+			seen[k] = true
+		}
+	}
+	if rule.Inverse != nil {
+		b, _ := json.Marshal(normalize(rule.Inverse.Body))
+		for _, m := range beforeFieldRe.FindAllStringSubmatch(string(b), -1) {
+			seen[m[1]] = true
+		}
+	}
+	if len(seen) == 0 {
+		return nil
+	}
+	out := make([]string, 0, len(seen))
+	for k := range seen {
+		out = append(out, k)
+	}
+	sort.Strings(out)
+	return out
+}
+
+// guardHash hashes the guarded fields of a resource (all of it if fields is
+// nil or the resource is not an object).
+func guardHash(v any, fields []string) string {
+	m, ok := v.(map[string]any)
+	if !ok || len(fields) == 0 {
+		return hashOf(v)
+	}
+	sub := map[string]any{}
+	for _, f := range fields {
+		sub[f] = m[f]
+	}
+	return hashOf(sub)
+}
+
 type planData struct {
 	Request    Request           `json:"request"`
 	Rule       *Rule             `json:"rule,omitempty"`
@@ -378,6 +439,7 @@ type planData struct {
 	BeforeReq  *Request          `json:"before_req,omitempty"`
 	Before     any               `json:"before,omitempty"`
 	BeforeHash string            `json:"before_hash,omitempty"`
+	Guard      []string          `json:"guard,omitempty"`
 }
 
 // Plan implements adapter.Adapter.
@@ -425,7 +487,8 @@ func (a *Adapter) Plan(ctx context.Context, t adapter.Target, op adapter.Operati
 			if resp.Status >= 400 {
 				return nil, fmt.Errorf("reading the resource before the change (%s %s) returned HTTP %d", br.Method, br.Path, resp.Status)
 			}
-			pd.BeforeReq, pd.Before, pd.BeforeHash = br, resp.Body, hashOf(resp.Body)
+			pd.Guard = guardFields(rule, req)
+			pd.BeforeReq, pd.Before, pd.BeforeHash = br, resp.Body, guardHash(resp.Body, pd.Guard)
 			if req.Body != nil {
 				if bm, ok := resp.Body.(map[string]any); ok {
 					if nm, ok := req.Body.(map[string]any); ok {
@@ -463,13 +526,14 @@ type undoHandle struct {
 	Inverse   *Request `json:"inverse,omitempty"`
 	GuardReq  *Request `json:"guard_req,omitempty"`
 	AfterHash string   `json:"after_hash,omitempty"`
+	Guard     []string `json:"guard,omitempty"`
 	Response  any      `json:"response,omitempty"`
 }
 
 // Apply implements adapter.Adapter.
 func (a *Adapter) Apply(ctx context.Context, t adapter.Target, p *adapter.Plan) (*adapter.Receipt, error) {
 	var pd planData
-	if err := json.Unmarshal(p.AdapterData, &pd); err != nil {
+	if err := decodeJSON(p.AdapterData, &pd); err != nil {
 		return nil, err
 	}
 	if pd.BeforeReq != nil {
@@ -477,7 +541,7 @@ func (a *Adapter) Apply(ctx context.Context, t adapter.Target, p *adapter.Plan) 
 		if err != nil {
 			return nil, err
 		}
-		if hashOf(resp.Body) != pd.BeforeHash {
+		if guardHash(resp.Body, pd.Guard) != pd.BeforeHash {
 			return nil, &adapter.ConflictError{Reason: "the resource changed since plan; re-plan required", Conflicts: []string{pd.BeforeReq.Path}}
 		}
 	}
@@ -501,7 +565,7 @@ func (a *Adapter) Apply(ctx context.Context, t adapter.Target, p *adapter.Plan) 
 		// Guard: the resource as it is right after the change.
 		if pd.BeforeReq != nil && pd.Request.Method != "DELETE" {
 			if after, err := a.do(ctx, t, pd.BeforeReq); err == nil && after.Status < 400 {
-				uh.GuardReq, uh.AfterHash = pd.BeforeReq, hashOf(after.Body)
+				uh.GuardReq, uh.Guard, uh.AfterHash = pd.BeforeReq, pd.Guard, guardHash(after.Body, pd.Guard)
 			}
 		}
 	}
@@ -521,7 +585,7 @@ func truncate(s string, n int) string {
 // Undo implements adapter.Adapter.
 func (a *Adapter) Undo(ctx context.Context, t adapter.Target, _ *adapter.Plan, r *adapter.Receipt) (*adapter.Receipt, error) {
 	var uh undoHandle
-	if err := json.Unmarshal(r.UndoHandle, &uh); err != nil {
+	if err := decodeJSON(r.UndoHandle, &uh); err != nil {
 		return nil, err
 	}
 	if uh.Inverse == nil || r.Reversibility == adapter.Irreversible {
@@ -532,7 +596,7 @@ func (a *Adapter) Undo(ctx context.Context, t adapter.Target, _ *adapter.Plan, r
 		if err != nil {
 			return nil, err
 		}
-		if hashOf(cur.Body) != uh.AfterHash {
+		if guardHash(cur.Body, uh.Guard) != uh.AfterHash {
 			return nil, &adapter.ConflictError{Reason: "the resource changed since apply; undo refused", Conflicts: []string{uh.GuardReq.Path}}
 		}
 	}

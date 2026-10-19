@@ -5,6 +5,7 @@ package config
 import (
 	"errors"
 	"fmt"
+	"io/fs"
 	"os"
 	"path/filepath"
 	"sort"
@@ -115,7 +116,13 @@ type Config struct {
 // in the working directory or a parent. A missing file yields an empty config.
 func Load() (*Config, error) {
 	if p := os.Getenv("CHANGEGATE_CONFIG"); p != "" {
-		return LoadFile(p)
+		c, err := LoadFile(p)
+		if errors.Is(err, fs.ErrNotExist) {
+			// Not created yet (e.g. before the first connect): Save writes it here.
+			abs, _ := filepath.Abs(p)
+			return &Config{Targets: map[string]Target{}, Path: abs, Dir: filepath.Dir(abs)}, nil
+		}
+		return c, err
 	}
 	wd, err := os.Getwd()
 	if err != nil {
