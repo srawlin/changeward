@@ -1,0 +1,114 @@
+// Changegate Change Record, v0. This is the open specification for how a
+// single agent-originated change, its evidence, its approvals and its undo
+// path are recorded. See spec/README.md for the human-readable description.
+syntax = "proto3";
+
+package changegate.v1;
+
+import "changegate/v1/adapter.proto";
+
+option go_package = "github.com/changegate/changegate/gen/changegate/v1;changegatev1";
+
+// Lifecycle states. See spec/README.md for allowed transitions.
+enum State {
+  STATE_UNSPECIFIED = 0;
+  PROPOSED = 1;
+  PLANNED = 2;
+  REHEARSED = 3;
+  AUTO_APPROVED = 4;
+  AWAITING_APPROVAL = 5;
+  APPROVED = 6;
+  REJECTED = 7;
+  APPLYING = 8;
+  APPLIED = 9;
+  VERIFYING = 10;
+  VERIFIED = 11;
+  FAILED = 12;
+  UNDOING = 13;
+  UNDONE = 14;
+}
+
+message Principal {
+  // "agent" or "human".
+  string kind = 1;
+  // Agent identity, e.g. "claude-code/2.1". Empty for humans.
+  string agent = 2;
+  // The delegating (or acting) human, e.g. "user:steve".
+  string human = 3;
+}
+
+message Provenance {
+  // "ci" (Lane A) or "direct" (Lane B).
+  string lane = 1;
+  string session_id = 2;
+  string pr = 3;
+  string commit = 4;
+  string host = 5;
+}
+
+message Decision {
+  // "approve", "require", "deny".
+  string decision = 1;
+  repeated string rules = 2;
+  repeated string reasons = 3;
+  repeated string approvers = 4;
+  // "inline" or "out-of-band".
+  string channel = 5;
+}
+
+message Approval {
+  string plan_hash = 1;
+  string approver = 2;
+  // "terminal", "mcp-elicitation", "slack", "web", "github".
+  string channel = 3;
+  bool approved = 4;
+  string reason = 5;
+  string at = 6;
+}
+
+message Event {
+  int64 seq = 1;
+  string change_id = 2;
+  string session_id = 3;
+  string type = 4;
+  State from_state = 5;
+  State to_state = 6;
+  string actor = 7;
+  string plan_hash = 8;
+  string reason = 9;
+  // JSON payload (decision, evidence references, receipt id).
+  bytes data = 10;
+  string at = 11;
+  // sha256(prev_hash || canonical(event without hash)). Forms the audit chain.
+  string prev_hash = 12;
+  string hash = 13;
+}
+
+message ChangeRecord {
+  string id = 1;
+  int64 seq = 2;
+  State state = 3;
+  Principal principal = 4;
+  Provenance provenance = 5;
+  Target target = 6;
+  Operation operation = 7;
+  Plan plan = 8;
+  Decision decision = 9;
+  repeated Approval approvals = 10;
+  Receipt receipt = 11;
+  Verification verification = 12;
+  Receipt undo_receipt = 13;
+  string created_at = 14;
+  string updated_at = 15;
+}
+
+message Session {
+  string id = 1;
+  Principal principal = 2;
+  string target = 3;
+  string env = 4;
+  string checkpoint_id = 5;
+  string incident_ref = 6;
+  string started_at = 7;
+  string ended_at = 8;
+}

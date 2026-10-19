@@ -1,0 +1,14 @@
+version: "2"
+linters:
+  enable:
+    - misspell
+    - unconvert
+    - bodyclose
+    - nilerr
+  settings:
+    errcheck:
+      # Writes to terminals and hashes are best-effort.
+      exclude-functions:
+        - fmt.Fprint
+        - fmt.Fprintf
+        - fmt.Fprintln

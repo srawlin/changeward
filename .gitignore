@@ -1,0 +1,9 @@
+/bin/
+/dist/
+.changegate/
+*.test
+*.out
+node_modules/
+__pycache__/
+*.egg-info/
+.venv/

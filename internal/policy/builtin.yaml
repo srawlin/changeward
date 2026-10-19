@@ -1,0 +1,72 @@
+# Changegate built-in policy: environment-class defaults (plan §6.3).
+# These apply only when no rule in your own policy file matches.
+# Rules combine as deny > require > approve.
+version: 1
+rules:
+  # ---- Lane B (direct) ----
+  - name: builtin/prod-restricted-read-only
+    when: change.lane == "direct" && change.env == "prod-restricted"
+    decide: deny
+    reason: prod-restricted targets are read-only in the direct lane; use Lane A or break-glass
+
+  - name: builtin/prod-direct-needs-incident
+    when: change.lane == "direct" && change.env == "prod" && session.incident_ref == ""
+    decide: deny
+    reason: direct production writes need an incident or ticket reference (changegate session start --incident ...)
+
+  - name: builtin/prod-direct-approval
+    when: change.lane == "direct" && change.env == "prod"
+    decide: require
+    channel: out-of-band
+    approvers: ["group:sre"]
+    reason: production direct changes need out-of-band approval by someone other than the proposer
+
+  - name: builtin/staging-auto
+    when: >
+      change.lane == "direct" && change.env == "staging" && change.reversibility == "reversible" &&
+      !change.destructive && change.blast.rows < 10000
+    decide: approve
+
+  - name: builtin/staging-confirm
+    when: change.lane == "direct" && change.env == "staging" && !(change.reversibility == "reversible" && !change.destructive && change.blast.rows < 10000)
+    decide: require
+    channel: out-of-band
+    reason: destructive, large or non-reversible staging change needs a second person
+
+  - name: builtin/shared-dev-auto
+    when: >
+      change.lane == "direct" && change.env == "shared-dev" && change.reversibility == "reversible" &&
+      !change.destructive && change.blast.rows < 1000
+    decide: approve
+
+  - name: builtin/shared-dev-confirm
+    when: change.lane == "direct" && change.env == "shared-dev" && !(change.reversibility == "reversible" && !change.destructive && change.blast.rows < 1000)
+    decide: require
+    reason: larger or destructive shared-dev change needs confirmation
+
+  - name: builtin/personal-auto
+    when: >
+      change.lane == "direct" && change.env == "personal" &&
+      (change.reversibility == "reversible" || (change.reversibility == "checkpoint-only" && session.has_checkpoint))
+    decide: approve
+
+  - name: builtin/personal-confirm
+    when: >
+      change.lane == "direct" && change.env == "personal" &&
+      !(change.reversibility == "reversible" || (change.reversibility == "checkpoint-only" && session.has_checkpoint))
+    decide: require
+    channel: inline
+    reason: not reversible without a checkpoint; confirm before applying
+
+  # ---- Lane A (CI) ----
+  - name: builtin/ci-auto
+    when: change.lane == "ci" && change.reversibility == "reversible" && change.rehearsal.passed && !change.destructive
+    decide: approve
+    reason: reversible, rehearsed, non-destructive (eligible as a standard change)
+
+  - name: builtin/ci-review
+    when: change.lane == "ci" && !(change.reversibility == "reversible" && change.rehearsal.passed && !change.destructive)
+    decide: require
+    channel: out-of-band
+    approvers: ["owner:codeowners"]
+    reason: migration is destructive, not proven reversible, or failed rehearsal
