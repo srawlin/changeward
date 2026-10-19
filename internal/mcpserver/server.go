@@ -237,7 +237,7 @@ func (s *Server) listTables(ctx context.Context, req *mcp.CallToolRequest, _ Emp
 // ProposeIn is the input of propose_change.
 type ProposeIn struct {
 	SQL    string `json:"sql" jsonschema:"the SQL to run; several statements are applied together in one transaction"`
-	Intent string `json:"intent,omitempty" jsonschema:"why: a short description of the intended change"`
+	Intent string `json:"intent,omitempty" jsonschema:"what the user asked for, in their words (Changegate checks that the effect matches it)"`
 }
 
 // ChangeOut is the structured result of change tools.

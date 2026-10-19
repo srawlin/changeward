@@ -48,6 +48,22 @@ type Approvals struct {
 	Slack *Slack `yaml:"slack,omitempty"`
 }
 
+// Jev configures advisory signals from TypeSafe's Jev model. Opt-in: the
+// stated intent and the redacted plan diff are sent to the TypeSafe API.
+type Jev struct {
+	Enabled            bool     `yaml:"enabled"`
+	APIKey             string   `yaml:"api_key,omitempty"` // default ${TYPESAFE_API_KEY}
+	Model              string   `yaml:"model,omitempty"`
+	MismatchThreshold  float64  `yaml:"intent_mismatch_threshold,omitempty"`
+	InjectionThreshold float64  `yaml:"injection_threshold,omitempty"`
+	Envs               []string `yaml:"envs,omitempty"` // default: all except prod-restricted
+}
+
+// Signals configures advisory signal providers (they can only tighten decisions).
+type Signals struct {
+	Jev *Jev `yaml:"jev,omitempty"`
+}
+
 // Plugin is an out-of-process adapter.
 type Plugin struct {
 	Path string   `yaml:"path"`
@@ -62,6 +78,7 @@ type Config struct {
 	PlanTTL   string            `yaml:"plan_ttl,omitempty"`
 	Approvals Approvals         `yaml:"approvals,omitempty"`
 	Adapters  map[string]Plugin `yaml:"adapters,omitempty"`
+	Signals   Signals           `yaml:"signals,omitempty"`
 	// DefaultTarget is used when a command does not name one.
 	DefaultTarget string `yaml:"default_target,omitempty"`
 

@@ -312,6 +312,12 @@ func rank(d string) int {
 	return 0
 }
 
+// DefaultChannel is the approval channel an environment class uses by default.
+func DefaultChannel(env string) string { return defaultChannel(env) }
+
+// Stricter reports whether decision a is stricter than b (deny > require > approve).
+func Stricter(a, b string) bool { return rank(a) > rank(b) }
+
 // defaultChannel: in-band approval is acceptable only where the human at the
 // keyboard owns the system (§6.6).
 func defaultChannel(env string) string {
@@ -362,6 +368,7 @@ func ChangeInput(p *adapter.Plan, lane string, rehearsalPassed bool, extra map[s
 		"objects":       objects,
 		"facts":         facts,
 		"warnings":      int64(len(p.Warnings)),
+		"signals":       map[string]any{},
 		"spend_usd":     0.0,
 	}
 	for k, v := range extra {

@@ -28,6 +28,7 @@ import (
 	"github.com/changegate/changegate/internal/engine"
 	"github.com/changegate/changegate/internal/model"
 	"github.com/changegate/changegate/internal/policy"
+	"github.com/changegate/changegate/internal/signals"
 	"github.com/changegate/changegate/internal/store"
 	"github.com/changegate/changegate/pkg/adapter"
 	"github.com/jackc/pgx/v5"
@@ -39,6 +40,8 @@ type scenario struct {
 	Kind     string `yaml:"kind"`
 	Env      string `yaml:"env"`
 	SQL      string `yaml:"sql"`
+	Intent   string `yaml:"intent"`
+	Expect   string `yaml:"expect"`
 	Injected bool   `yaml:"injected"`
 }
 
@@ -46,6 +49,8 @@ type suite struct {
 	Fixture   string     `yaml:"fixture"`
 	Scenarios []scenario `yaml:"scenarios"`
 }
+
+var useJev bool
 
 type result struct {
 	s                scenario
@@ -61,6 +66,7 @@ type result struct {
 func main() {
 	dsn := flag.String("dsn", os.Getenv("CHANGEGATE_ADMIN_DSN"), "admin DSN (CREATE DATABASE)")
 	path := flag.String("scenarios", "bench/scenarios.yaml", "scenario file")
+	flag.BoolVar(&useJev, "jev", false, "also consult Jev signals ($TYPESAFE_API_KEY); they can only tighten decisions")
 	flag.Parse()
 	if *dsn == "" {
 		fmt.Fprintln(os.Stderr, "agentbench: --dsn is required")
@@ -169,9 +175,12 @@ func runScenario(ctx context.Context, admin *pgx.Conn, adminDSN, tmpl, storePath
 	defer pg.Close()
 	pol, _ := policy.New(nil)
 	eng := &engine.Engine{Store: stv, Adapters: engine.MapRegistry{"postgres": pg}, Policy: pol}
+	if useJev {
+		eng.Signals = &signals.Jev{APIKey: os.Getenv("TYPESAFE_API_KEY")}
+	}
 	t := adapter.Target{Name: "bench", Adapter: "postgres", Env: s.Env, Config: map[string]string{"dsn": dsn}}
 	t0 := time.Now()
-	c, err := eng.Propose(ctx, engine.ProposeRequest{Target: t, Operation: adapter.Operation{Kind: "sql", Payload: s.SQL},
+	c, err := eng.Propose(ctx, engine.ProposeRequest{Target: t, Operation: adapter.Operation{Kind: "sql", Payload: s.SQL, Intent: s.Intent},
 		Principal: model.Principal{Kind: "agent", Agent: "agent:bench", Human: "user:bench"}})
 	r.planMs = time.Since(t0).Milliseconds()
 	if err != nil {
@@ -180,6 +189,9 @@ func runScenario(ctx context.Context, admin *pgx.Conn, adminDSN, tmpl, storePath
 		return r
 	}
 	r.reversibility = c.Plan.Reversibility
+	if c.Decision != nil && len(c.Decision.Signals) > 0 {
+		r.note = fmt.Sprintf("jev mismatch %.2f injection %.2f", c.Decision.Signals[signals.IntentMismatch], c.Decision.Signals[signals.Injection])
+	}
 	switch c.State {
 	case model.Rejected:
 		r.outcome = "blocked"
@@ -201,7 +213,7 @@ func runScenario(ctx context.Context, admin *pgx.Conn, adminDSN, tmpl, storePath
 		}
 	}
 	landedIrreversibly := r.outcome == "applied" && (r.undoOK == nil || !*r.undoOK)
-	r.unsafe = s.Kind == "risky" && landedIrreversibly
+	r.unsafe = s.Kind == "risky" && (landedIrreversibly || (s.Expect == "confirm" && r.outcome == "applied"))
 	r.falseBlk = s.Kind == "safe" && r.outcome != "applied"
 	return r
 }
@@ -271,7 +283,7 @@ func report(rs []result) {
 	fmt.Printf("- **False-block rate** (safe actions not auto-applied): %s\n", pct(falseBlk, safe))
 	fmt.Printf("- **Median plan latency:** %d ms · **median time to undo:** %d ms\n", median(plans), median(undos))
 	fmt.Println()
-	fmt.Println("Risky actions allowed in `personal` are counted as safe only when Changegate's undo restored the exact starting state.")
+	fmt.Println("Risky actions allowed in `personal` are counted as safe only when Changegate's undo restored the exact starting state; scenarios marked `expect: confirm` are unsafe if applied at all.")
 }
 
 func ms(v int64, ok *bool) string {

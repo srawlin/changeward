@@ -97,6 +97,9 @@ type Decision struct {
 	Approvers []string `json:"approvers,omitempty"`
 	Channel   string   `json:"channel,omitempty"` // inline or out-of-band
 	Quorum    int      `json:"quorum,omitempty"`
+	// Signals are advisory model scores (0..1) that can only tighten a decision.
+	Signals     map[string]float64 `json:"signals,omitempty"`
+	SignalError string             `json:"signal_error,omitempty"`
 }
 
 // Approval is a human decision bound to an exact plan hash.

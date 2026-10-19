@@ -108,6 +108,11 @@ rules:
 Rules combine as deny > require > approve. A rule that fails to evaluate counts as `require`, never as a silent
 pass.
 
+Optional **Jev signals** (`signals: {jev: {enabled: true}}`, key in `$TYPESAFE_API_KEY`): before auto-approving a
+change, Changegate asks TypeSafe's Jev whether the effect goes beyond the agent's stated intent and whether the
+intent looks injected. Confident scores turn the approval into "confirm with a human". Signals can only tighten
+decisions, never approve.
+
 ## Demo and benchmark
 
 - [`demo/replit`](demo/replit): *What would have saved the Replit database.* An agent deletes production data

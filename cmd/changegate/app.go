@@ -13,6 +13,7 @@ import (
 	"github.com/changegate/changegate/internal/engine"
 	"github.com/changegate/changegate/internal/model"
 	"github.com/changegate/changegate/internal/policy"
+	"github.com/changegate/changegate/internal/signals"
 	"github.com/changegate/changegate/internal/store"
 	"github.com/changegate/changegate/pkg/adapter"
 )
@@ -79,6 +80,26 @@ func (a *app) engine() (*engine.Engine, error) {
 	a.eng = &engine.Engine{Store: st, Adapters: a.registry(), Policy: pol, PlanTTL: a.cfg.TTL()}
 	if n := a.notifier(); n != nil {
 		a.eng.Notifier = n
+	}
+	if j := a.cfg.Signals.Jev; j != nil && j.Enabled {
+		key := os.ExpandEnv(j.APIKey)
+		if key == "" {
+			key = os.Getenv("TYPESAFE_API_KEY")
+		}
+		a.eng.Signals = &signals.Jev{APIKey: key, Model: j.Model}
+		a.eng.SignalThresholds = signals.DefaultThresholds
+		if j.MismatchThreshold > 0 {
+			a.eng.SignalThresholds.IntentMismatch = j.MismatchThreshold
+		}
+		if j.InjectionThreshold > 0 {
+			a.eng.SignalThresholds.Injection = j.InjectionThreshold
+		}
+		if len(j.Envs) > 0 {
+			a.eng.SignalEnvs = map[string]bool{}
+			for _, e := range j.Envs {
+				a.eng.SignalEnvs[e] = true
+			}
+		}
 	}
 	return a.eng, nil
 }

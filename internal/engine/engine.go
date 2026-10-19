@@ -14,10 +14,12 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/changegate/changegate/internal/model"
 	"github.com/changegate/changegate/internal/policy"
+	"github.com/changegate/changegate/internal/signals"
 	"github.com/changegate/changegate/internal/store"
 	"github.com/changegate/changegate/pkg/adapter"
 )
@@ -52,6 +54,13 @@ type Engine struct {
 	Notifier Notifier
 	PlanTTL  time.Duration
 	Now      func() time.Time
+	// Signals, if set, is consulted when policy would auto-approve a change
+	// that carries a stated intent. Signals can only tighten the decision.
+	Signals          signals.Provider
+	SignalThresholds signals.Thresholds
+	// SignalEnvs limits where signals are evaluated (nil: every environment
+	// except prod-restricted).
+	SignalEnvs map[string]bool
 }
 
 // Errors returned by the engine.
@@ -185,6 +194,9 @@ func (e *Engine) Propose(ctx context.Context, req ProposeRequest) (*model.Change
 		Principal: map[string]any{"kind": req.Principal.Kind, "agent": req.Principal.Agent, "human": req.Principal.Human},
 		Session:   sessIn,
 	})
+	if d.Decision == policy.Approve {
+		d = e.applySignals(ctx, d, plan, lane, rehearsed, req, sessIn)
+	}
 	c.Decision = &d
 	to := model.AwaitingApproval
 	switch d.Decision {
@@ -202,6 +214,62 @@ func (e *Engine) Propose(ctx context.Context, req ProposeRequest) (*model.Change
 		}
 	}
 	return c, nil
+}
+
+// applySignals asks the signal provider about an auto-approved change and
+// tightens the decision if a signal is over its threshold (or if a user
+// policy rule over change.signals says so). It never loosens a decision,
+// and a provider failure leaves the decision unchanged.
+func (e *Engine) applySignals(ctx context.Context, d model.Decision, plan *adapter.Plan, lane string, rehearsed bool, req ProposeRequest, sessIn map[string]any) model.Decision {
+	if e.Signals == nil || strings.TrimSpace(req.Operation.Intent) == "" {
+		return d
+	}
+	env := req.Target.Env
+	if e.SignalEnvs != nil && !e.SignalEnvs[env] || e.SignalEnvs == nil && env == adapter.EnvProdRestricted {
+		return d
+	}
+	var kinds []string
+	for _, s := range plan.Classification.Statements {
+		kinds = append(kinds, s.Kind)
+	}
+	sig, err := e.Signals.Evaluate(ctx, signals.Input{Intent: req.Operation.Intent, SQL: req.Operation.Payload, Effect: plan.Diff, Env: env,
+		Reversibility: string(plan.Reversibility), Statements: kinds})
+	if err != nil {
+		d.SignalError = e.Signals.Name() + ": " + err.Error()
+		return d
+	}
+	d.Signals = sig
+	// User rules may reference change.signals.
+	sm := map[string]any{}
+	for k, v := range sig {
+		sm[k] = v
+	}
+	extra := map[string]any{"signals": sm}
+	for k, v := range req.PolicyExtra {
+		extra[k] = v
+	}
+	d2 := e.Policy.Decide(policy.Input{
+		Change:    policy.ChangeInput(plan, lane, rehearsed, extra),
+		Principal: map[string]any{"kind": req.Principal.Kind, "agent": req.Principal.Agent, "human": req.Principal.Human},
+		Session:   sessIn,
+	})
+	if policy.Stricter(d2.Decision, d.Decision) {
+		d2.Signals = sig
+		d = d2
+	}
+	th := e.SignalThresholds
+	if th == (signals.Thresholds{}) {
+		th = signals.DefaultThresholds
+	}
+	if reasons := th.Tighten(sig); len(reasons) > 0 && d.Decision == policy.Approve {
+		d.Decision = policy.Require
+		d.Rules = append(d.Rules, "signals/"+e.Signals.Name())
+		d.Reasons = append(d.Reasons, reasons...)
+		d.Approvers = []string{"owner"}
+		d.Quorum = 1
+		d.Channel = policy.DefaultChannel(env)
+	}
+	return d
 }
 
 func join(xs []string) string {

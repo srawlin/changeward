@@ -63,6 +63,25 @@ need a public release and outreach. None of that has happened. Before launch, th
 check for the name "Changegate" still needs doing. The GitHub org, npm scope `@changegate`, PyPI name and Homebrew
 tap used here are placeholders.
 
+## Beyond the plan: Jev advisory signals
+
+Optional (`signals.jev.enabled: true` in `changegate.yaml`; key from `$TYPESAFE_API_KEY`). When policy would
+auto-approve a change that carries a stated intent, Changegate asks TypeSafe's Jev two typed questions: is the
+effect beyond the stated intent (`intent_mismatch`), and does the intent look injected (`injection`)? Scores over
+0.8 / 0.9 turn the approval into "confirm with a human" (inline in personal and shared-dev, out of band elsewhere).
+User CEL rules can also read `change.signals.*`.
+
+Design constraints: signals **only tighten** (a manipulated model cannot approve anything); provider errors leave
+the decision unchanged and are recorded; scores are stored in the decision and audit event; only the intent, the
+agent's SQL and the already-redacted diff are sent; off by default, and never in `prod-restricted` unless listed.
+Measured in `bench/` (live API): it caught both intent-mismatch scenarios (0.95 mismatch; 0.96 injection) with no
+false blocks, adding about 60–200 ms to auto-approved changes. Tests: `internal/signals` (request shape, and a live
+check when the key is set) and `internal/engine/signals_test.go` (tighten-only behavior, errors, user rules).
+
+Considered and not done: letting Jev classify unannotated MCP tools or decide reversibility. Both would let a model
+loosen a decision. Detecting sensitive columns from column names only, to suggest redaction tags, is a reasonable
+low-risk next use.
+
 ## Known gaps and follow-ups
 
 - **Lane A deploy-time re-check (§5.3.4):** the gate does not yet confirm that production's schema version still
