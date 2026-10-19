@@ -22,10 +22,8 @@ import (
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
 
-// Querier runs read-only queries (implemented by the Postgres adapter).
-type Querier interface {
-	Query(ctx context.Context, t adapter.Target, sql string, maxRows int) (*postgres.QueryResult, error)
-}
+// Querier runs read-only queries (implemented by the SQL adapters).
+type Querier = adapter.Querier
 
 // Server is the Changegate MCP server for one target.
 type Server struct {
@@ -182,7 +180,7 @@ type QueryIn struct {
 	MaxRows int    `json:"max_rows,omitempty" jsonschema:"maximum rows to return (default 100, max 1000)"`
 }
 
-func (s *Server) query(ctx context.Context, req *mcp.CallToolRequest, in QueryIn) (*mcp.CallToolResult, *postgres.QueryResult, error) {
+func (s *Server) query(ctx context.Context, req *mcp.CallToolRequest, in QueryIn) (*mcp.CallToolResult, *adapter.QueryResult, error) {
 	t, _, err := s.target(ctx, req)
 	if err != nil {
 		return nil, nil, err
@@ -202,7 +200,7 @@ func (s *Server) query(ctx context.Context, req *mcp.CallToolRequest, in QueryIn
 	return text("%s", formatTable(res)), res, nil
 }
 
-func formatTable(r *postgres.QueryResult) string {
+func formatTable(r *adapter.QueryResult) string {
 	var b strings.Builder
 	b.WriteString(strings.Join(r.Columns, " | "))
 	b.WriteString("\n")
@@ -224,7 +222,17 @@ func formatTable(r *postgres.QueryResult) string {
 // Empty is an empty input.
 type Empty struct{}
 
-func (s *Server) listTables(ctx context.Context, req *mcp.CallToolRequest, _ Empty) (*mcp.CallToolResult, *postgres.QueryResult, error) {
+func (s *Server) listTables(ctx context.Context, req *mcp.CallToolRequest, _ Empty) (*mcp.CallToolResult, *adapter.QueryResult, error) {
+	t, _, err := s.target(ctx, req)
+	if err != nil {
+		return nil, nil, err
+	}
+	if t.Adapter == "mysql" {
+		return s.query(ctx, req, QueryIn{MaxRows: 1000, SQL: `SELECT CONCAT(t.TABLE_SCHEMA, '.', t.TABLE_NAME) AS table_name, t.TABLE_ROWS AS approx_rows,
+			GROUP_CONCAT(CONCAT(c.COLUMN_NAME, ' ', c.COLUMN_TYPE) ORDER BY c.ORDINAL_POSITION SEPARATOR ', ') AS columns
+			FROM information_schema.TABLES t JOIN information_schema.COLUMNS c ON c.TABLE_SCHEMA = t.TABLE_SCHEMA AND c.TABLE_NAME = t.TABLE_NAME
+			WHERE t.TABLE_SCHEMA = DATABASE() AND c.COLUMN_NAME NOT LIKE '\_cg\_%' GROUP BY t.TABLE_SCHEMA, t.TABLE_NAME, t.TABLE_ROWS ORDER BY 1`})
+	}
 	return s.query(ctx, req, QueryIn{MaxRows: 1000, SQL: `SELECT n.nspname || '.' || c.relname AS table_name,
 		  greatest(c.reltuples, 0)::bigint AS approx_rows,
 		  string_agg(a.attname || ' ' || format_type(a.atttypid, a.atttypmod), ', ' ORDER BY a.attnum) AS columns
@@ -288,7 +296,7 @@ func (s *Server) propose(ctx context.Context, req *mcp.CallToolRequest, in Propo
 	c, err := s.Engine.Propose(ctx, engine.ProposeRequest{Target: t, Operation: adapter.Operation{Kind: "sql", Payload: in.SQL, Intent: in.Intent},
 		Principal: s.principal(req), SessionID: sess.ID, Provenance: model.Provenance{Host: "mcp:" + strings.TrimPrefix(s.agentName(req), "agent:")}})
 	if err != nil {
-		if errors.Is(err, postgres.ErrReadOnly) {
+		if errors.Is(err, postgres.ErrReadOnly) || strings.Contains(err.Error(), "read-only; use query") {
 			return toolError(errors.New("that SQL only reads; use the query tool"))
 		}
 		return toolError(err)

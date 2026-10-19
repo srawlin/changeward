@@ -19,6 +19,10 @@ import (
 )
 
 func (a *app) mcpServer(target string, checkpoint, branch bool, sessionID string) (*mcpserver.Server, error) {
+	return a.mcpServerFor("postgres", target, checkpoint, branch, sessionID)
+}
+
+func (a *app) mcpServerFor(adapterName, target string, checkpoint, branch bool, sessionID string) (*mcpserver.Server, error) {
 	eng, err := a.engine()
 	if err != nil {
 		return nil, err
@@ -27,9 +31,13 @@ func (a *app) mcpServer(target string, checkpoint, branch bool, sessionID string
 	if err != nil {
 		return nil, err
 	}
-	pg, err := a.registry().Adapter("postgres")
+	ad, err := a.registry().Adapter(adapterName)
 	if err != nil {
 		return nil, err
+	}
+	q, ok := ad.(mcpserver.Querier)
+	if !ok {
+		return nil, fmt.Errorf("adapter %s has no MCP server", adapterName)
 	}
 	if target != "" {
 		if _, err := a.cfg.Resolve(target); err != nil {
@@ -38,7 +46,7 @@ func (a *app) mcpServer(target string, checkpoint, branch bool, sessionID string
 	} else if t, err := a.cfg.Resolve(""); err == nil {
 		target = t.Name
 	}
-	return &mcpserver.Server{Engine: eng, Sessions: svc, Querier: pg.(*postgres.Adapter), Target: target, Human: humanIdentity(),
+	return &mcpserver.Server{Engine: eng, Sessions: svc, Querier: q, Target: target, Human: humanIdentity(),
 		Checkpoint: checkpoint, Branch: branch, SessionID: sessionID, Version: version}, nil
 }
 
@@ -55,15 +63,15 @@ Add to an MCP client, e.g. Claude Code's .mcp.json:
   {"mcpServers": {"changegate": {"command": "changegate", "args": ["mcp", "postgres", "--target", "app"]}}}`,
 		Args: cobra.ExactArgs(1),
 		RunE: func(_ *cobra.Command, args []string) error {
-			if args[0] != "postgres" {
-				return fmt.Errorf("adapter %q has no MCP server yet (available: postgres)", args[0])
+			if args[0] != "postgres" && args[0] != "mysql" {
+				return fmt.Errorf("adapter %q has no MCP server yet (available: postgres, mysql)", args[0])
 			}
 			a, err := newApp()
 			if err != nil {
 				return err
 			}
 			defer a.close()
-			s, err := a.mcpServer(target, checkpoint, branch, sessionID)
+			s, err := a.mcpServerFor(args[0], target, checkpoint, branch, sessionID)
 			if err != nil {
 				return err
 			}

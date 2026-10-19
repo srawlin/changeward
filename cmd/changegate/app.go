@@ -8,6 +8,7 @@ import (
 	"sync"
 
 	"github.com/srawlin/changegate/adapters/kubernetes"
+	"github.com/srawlin/changegate/adapters/mysql"
 	"github.com/srawlin/changegate/adapters/postgres"
 	"github.com/srawlin/changegate/adapters/terraform"
 	"github.com/srawlin/changegate/adapters/toykv"
@@ -113,6 +114,7 @@ func (a *app) registry() *registry {
 			"toykv":      toykv.New(),
 			"terraform":  terraform.New(a.cfg.StateDir()),
 			"kubernetes": kubernetes.New(),
+			"mysql":      mysql.New(),
 		}, plugins: map[string]*adapter.Plugin{}}
 		a.closers = append(a.closers, a.reg.close)
 	}

@@ -264,6 +264,19 @@ type CopyRef struct {
 	Data   json.RawMessage `json:"data,omitempty"`
 }
 
+// QueryResult is a capped, redacted read result (the read pass-through path).
+type QueryResult struct {
+	Columns   []string   `json:"columns"`
+	Rows      [][]string `json:"rows"`
+	Truncated bool       `json:"truncated"`
+	Redacted  []string   `json:"redacted,omitempty"`
+}
+
+// Querier is implemented by adapters that serve read-only queries.
+type Querier interface {
+	Query(ctx context.Context, t Target, query string, maxRows int) (*QueryResult, error)
+}
+
 // ErrUnsupported is returned for capabilities an adapter does not implement.
 var ErrUnsupported = errors.New("operation not supported by adapter")
 

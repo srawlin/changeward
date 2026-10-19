@@ -14,12 +14,7 @@ import (
 var _ adapter.Adapter = (*Adapter)(nil)
 
 // QueryResult is a capped, redacted read result.
-type QueryResult struct {
-	Columns   []string   `json:"columns"`
-	Rows      [][]string `json:"rows"`
-	Truncated bool       `json:"truncated"`
-	Redacted  []string   `json:"redacted,omitempty"`
-}
+type QueryResult = adapter.QueryResult
 
 // Query runs read-only SQL in a READ ONLY transaction (so even functions
 // cannot write), with a statement timeout, capped rows and sensitive
