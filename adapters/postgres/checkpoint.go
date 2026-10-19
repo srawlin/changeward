@@ -237,9 +237,15 @@ func (a *Adapter) Restore(ctx context.Context, t adapter.Target, cp *adapter.Che
 			return nil, fmt.Errorf("pg_restore: %v: %s", err, strings.TrimSpace(stderr.String()))
 		}
 	case StrategyNeon:
-		if err := a.neonRestore(ctx, t, data.Neon); err != nil {
+		kept, err := a.neonRestore(ctx, t, data.Neon)
+		if err != nil {
 			return nil, err
 		}
+		out := "restored checkpoint " + cp.ID
+		if kept != "" {
+			out += "; Neon keeps the pre-restore state as branch " + kept + " (now an ancestor of the target branch)"
+		}
+		return &adapter.Receipt{ID: adapter.NewID("r"), AppliedAt: time.Now().UTC().Format(time.RFC3339Nano), Reversibility: adapter.CheckpointOnly, Output: out}, nil
 	default:
 		return nil, fmt.Errorf("unknown checkpoint strategy %q", data.Strategy)
 	}

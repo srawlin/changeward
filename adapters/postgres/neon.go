@@ -18,12 +18,19 @@ import (
 //   neon_project_id  project
 //   neon_branch_id   the branch the target DSN points at (parent for new branches)
 //   neon_api_key     API key; defaults to $NEON_API_KEY
+//   neon_checkpoint  "lsn" (default: a point in the branch's history) or "branch"
+//   neon_preserve_on_restore  "false" to not keep the pre-restore state as a
+//                    branch (branch checkpoints only; Neon always keeps it for LSN
+//                    restores, and the kept branch becomes an ancestor of the target)
 // Branches are copy-on-write: a T3-tier copy in seconds, inside Neon.
 
 type neonRef struct {
 	ProjectID string `json:"project_id"`
 	BranchID  string `json:"branch_id"`
 	Name      string `json:"name"`
+	// LSN checkpoints record a point in the branch's own history instead of
+	// creating a branch (valid within the project's history retention window).
+	LSN string `json:"lsn,omitempty"`
 }
 
 // NeonBaseURL can be overridden in tests.
@@ -100,6 +107,21 @@ func (a *Adapter) neonCreate(ctx context.Context, t adapter.Target, name string,
 }
 
 func (a *Adapter) neonCheckpoint(ctx context.Context, t adapter.Target, label string) (checkpointData, error) {
+	if t.Config["neon_checkpoint"] != "branch" {
+		branch := t.Config["neon_branch_id"]
+		if branch == "" {
+			return checkpointData{}, errors.New("neon: options.neon_branch_id is required for checkpoints")
+		}
+		pool, err := a.pool(ctx, t)
+		if err != nil {
+			return checkpointData{}, err
+		}
+		var lsn string
+		if err := pool.QueryRow(ctx, `SELECT pg_current_wal_lsn()::text`).Scan(&lsn); err != nil {
+			return checkpointData{}, err
+		}
+		return checkpointData{Strategy: StrategyNeon, Neon: &neonRef{ProjectID: t.Config["neon_project_id"], BranchID: branch, LSN: lsn}}, nil
+	}
 	name := "changegate-cp-" + time.Now().UTC().Format("20060102-150405")
 	if label != "" {
 		name += "-" + label
@@ -111,19 +133,31 @@ func (a *Adapter) neonCheckpoint(ctx context.Context, t adapter.Target, label st
 	return checkpointData{Strategy: StrategyNeon, Neon: &neonRef{ProjectID: t.Config["neon_project_id"], BranchID: out.Branch.ID, Name: name}}, nil
 }
 
-func (a *Adapter) neonRestore(ctx context.Context, t adapter.Target, ref *neonRef) error {
+// neonRestore restores the target branch from the checkpoint and returns the
+// name of the branch that preserves the pre-restore state ("" if not kept).
+func (a *Adapter) neonRestore(ctx context.Context, t adapter.Target, ref *neonRef) (string, error) {
 	target := t.Config["neon_branch_id"]
 	if target == "" || ref == nil {
-		return errors.New("neon: options.neon_branch_id is required to restore")
+		return "", errors.New("neon: options.neon_branch_id is required to restore")
 	}
 	a.dropPool(t.Config["dsn"])
-	return neonDo(ctx, t, http.MethodPost, fmt.Sprintf("/projects/%s/branches/%s/restore", ref.ProjectID, target),
-		map[string]any{"source_branch_id": ref.BranchID, "preserve_under_name": "changegate-pre-restore-" + time.Now().UTC().Format("20060102-150405")}, nil)
+	body := map[string]any{"source_branch_id": ref.BranchID}
+	if ref.LSN != "" {
+		body["source_lsn"] = ref.LSN
+	}
+	// Neon requires preserving the pre-restore state when a branch is reset
+	// to its own history; for branch checkpoints it is optional.
+	preserve := ""
+	if ref.LSN != "" || t.Config["neon_preserve_on_restore"] != "false" {
+		preserve = "changegate-pre-restore-" + time.Now().UTC().Format("20060102-150405")
+		body["preserve_under_name"] = preserve
+	}
+	return preserve, neonDo(ctx, t, http.MethodPost, fmt.Sprintf("/projects/%s/branches/%s/restore", ref.ProjectID, target), body, nil)
 }
 
 func (a *Adapter) neonDeleteBranch(ctx context.Context, t adapter.Target, ref *neonRef) error {
-	if ref == nil {
-		return nil
+	if ref == nil || ref.LSN != "" {
+		return nil // LSN checkpoints own no branch
 	}
 	return neonDo(ctx, t, http.MethodDelete, fmt.Sprintf("/projects/%s/branches/%s", ref.ProjectID, ref.BranchID), nil, nil)
 }

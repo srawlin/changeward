@@ -31,7 +31,7 @@ runs on the toy adapter, in process and as a plugin binary (`changegate adapter 
 | MCP proxy | Done, tested | `changegate proxy -- <server>`; tested against a fake upstream (reads pass through, SQL writes applied by Changegate, unknown write tools gated and logged) |
 | Claude Code plugin and hooks | Done; hook tested | `changegate hook claude-code`, `changegate install claude-code`, `integrations/claude-code` plugin plus marketplace manifest. **Not verified by loading the plugin in Claude Code.** |
 | Sessions: `log` / `undo` / `rewind` | Done, tested | Dependency-aware undo; rewind with checkpoint fallback |
-| Branch-as-working-target (template DB, Neon) | Template: done, tested. Neon: implemented, **untested** | No Neon API key was available. Template branching needs no other connections on the source (`allow_terminate` for personal targets). |
+| Branch-as-working-target (template DB, Neon) | Done, tested (Neon against a live project) | `TestNeonLive` covers checkpoint (LSN in the branch's history, no branch created), restore and branch copies (it runs when `NEON_*` env vars are set). Neon always keeps the pre-restore state as an ancestor branch, and the receipt names it. Template branching needs no other connections on the source (`allow_terminate` for personal targets). |
 | `promote` to migration files for 3 frameworks | Done for 10 | golang-migrate, goose, Flyway, Liquibase SQL, Atlas, Prisma, Sqitch, Rails, Django, Alembic. All writers are tested by writing and then re-detecting the result. End to end (session → promote → Lane A rehearsal) was run manually for golang-migrate. `--pr` uses git and gh but was **not run against GitHub**. |
 | Approvals: terminal, MCP elicitation, Slack | Done, tested | Elicitation uses MCP multi-round-trip input requests (protocol 2026-07-28; the SDK falls back for older clients). Slack: signed interactions and user mapping, tested against a fake Slack API. **Not tested against real Slack.** |
 
@@ -40,7 +40,7 @@ runs on the toy adapter, in process and as a plugin binary (`changegate adapter 
 | Scope item | Status | Notes |
 | --- | --- | --- |
 | Migration detection: Flyway, Liquibase, Atlas, Prisma, Rails, Django, Alembic, golang-migrate | Done, tested | Also goose and Sqitch. Liquibase XML/YAML changelogs are detected, but rehearsal needs the Liquibase CLI (command mode). |
-| Rehearsal on template DB / Neon branch | Template and T0/T1: done, tested. Neon: implemented, **untested** | Per-migration forward → locks/rewrites/rows → down → catalog and data checksum compare; re-apply check; command mode for code frameworks (tested with psql standing in). Synthetic data generator (T1) respects types, NOT NULL and FKs, and scales from production `reltuples`. |
+| Rehearsal on template DB / Neon branch | Done, tested; Neon run live (`rehearse --neon`, T3) | Per-migration forward → locks/rewrites/rows → down → catalog and data checksum compare; re-apply check; command mode for code frameworks (tested with psql standing in). Synthetic data generator (T1) respects types, NOT NULL and FKs, and scales from production `reltuples`. |
 | PR report | Done | Markdown with no row values; agent provenance (bots, trailers, branches) |
 | GitHub Action | Written, **not run on GitHub** | `integrations/github-action/action.yml` (composite). Comment and status posting is implemented against the REST API but untested against github.com. Needs a published release to download. |
 | GitLab component | Written, **not run on GitLab** | `integrations/gitlab-component/templates/rehearse.yml` |
@@ -84,6 +84,7 @@ low-risk next use.
 
 ## Known gaps and follow-ups
 
+- **Neon + old libpq:** clients older than libpq 14 need `?options=endpoint%3D<id>` (SNI). Changegate's Go driver is unaffected.
 - **Lane A deploy-time re-check (§5.3.4):** the gate does not yet confirm that production's schema version still
   matches the rehearsed base. Server-mode deployment protection rules are M3.
 - **Lane B `branch_above_rows` (§5.3.2):** large or risky statements are not yet automatically moved to a branch.
