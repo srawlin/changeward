@@ -25,7 +25,8 @@ func Gate(ctx context.Context, eng *engine.Engine, t adapter.Target, payload str
 	if err != nil {
 		return nil, err
 	}
-	plan, err := ad.Plan(ctx, t, adapter.Operation{Kind: "k8s", Payload: payload})
+	op := adapter.Operation{Kind: "k8s", Payload: payload, Intent: "GitOps sync", Params: map[string]string{"gitops_sync": "true"}}
+	plan, err := ad.Plan(ctx, t, op)
 	if err != nil {
 		return nil, err
 	}
@@ -42,8 +43,7 @@ func Gate(ctx context.Context, eng *engine.Engine, t adapter.Target, payload str
 		}
 	}
 	prov.Host = "gitops-gate"
-	return eng.Propose(ctx, engine.ProposeRequest{Target: t, Lane: model.LaneCI, Operation: adapter.Operation{Kind: "k8s", Payload: payload,
-		Intent: "GitOps sync"}, Principal: p, Provenance: prov})
+	return eng.Propose(ctx, engine.ProposeRequest{Target: t, Lane: model.LaneCI, Operation: op, Principal: p, Provenance: prov})
 }
 
 // Passed reports whether the gate lets the sync proceed.

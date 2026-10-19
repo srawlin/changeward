@@ -12,8 +12,10 @@ spec:
     metadata:
       labels: {{- include "cg.labels" . | nindent 8 }}
       annotations:
-        checksum/config: {{ .Values.config | sha256sum }}
+        checksum/config: {{ printf "%s\n%s" .Values.config .Values.policy | sha256sum }}
     spec:
+      serviceAccountName: {{ include "cg.serviceAccountName" . }}
+      automountServiceAccountToken: {{ .Values.rbac.kubernetes.enabled }}
       securityContext: {{- toYaml .Values.podSecurityContext | nindent 8 }}
       containers:
         - name: executor
@@ -23,6 +25,7 @@ spec:
           env:
             - { name: CHANGEGATE_CONFIG, value: /etc/changegate/changegate.yaml }
             - { name: CHANGEGATE_STORE, value: /data/changegate.db }
+            - { name: HOME, value: /tmp }   # kubectl and git need a writable home (read-only root filesystem)
           {{- if .Values.existingSecret }}
           envFrom:
             - secretRef: { name: {{ .Values.existingSecret }} }

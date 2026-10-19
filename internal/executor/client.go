@@ -28,7 +28,8 @@ var _ backend.Backend = (*Client)(nil)
 
 // NewClient returns an executor client.
 func NewClient(u, token string) *Client {
-	return &Client{URL: strings.TrimRight(u, "/"), Token: token, HTTP: &http.Client{Timeout: 120 * time.Second}}
+	// Tokens often come from mounted Secret files with a trailing newline.
+	return &Client{URL: strings.TrimRight(u, "/"), Token: strings.TrimSpace(token), HTTP: &http.Client{Timeout: 120 * time.Second}}
 }
 
 // APIError is an error returned by the executor.

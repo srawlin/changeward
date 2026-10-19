@@ -70,6 +70,12 @@ Job (see integrations/argocd). Changegate never applies here: the GitOps control
 				return errors.New("--manifests is required")
 			}
 			payload, err := readManifests(manifests)
+			if err == nil {
+				var hooks int
+				if payload, hooks, err = gitops.StripHooks(payload); err == nil && hooks > 0 {
+					fmt.Fprintf(os.Stderr, "skipped %d hook resource(s) (Argo CD / Helm hooks are not desired state)\n", hooks)
+				}
+			}
 			if err != nil {
 				return err
 			}

@@ -528,7 +528,9 @@ func (a *Adapter) Plan(ctx context.Context, t adapter.Target, op adapter.Operati
 		}
 		if s.Owner != "" && s.Owner != "helm" {
 			owners[s.Owner] = true
-			p.Warnings = append(p.Warnings, fmt.Sprintf("%s is managed by %s; a direct change will be reverted on the next sync. Change it in Git, or pause sync for the incident", s.Ref, s.Owner))
+			if op.Params["gitops_sync"] != "true" { // the GitOps gate plans the controller's own sync
+				p.Warnings = append(p.Warnings, fmt.Sprintf("%s is managed by %s; a direct change will be reverted on the next sync. Change it in Git, or pause sync for the incident", s.Ref, s.Owner))
+			}
 		}
 	}
 	if len(owners) > 0 {

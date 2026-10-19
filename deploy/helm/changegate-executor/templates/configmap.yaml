@@ -6,3 +6,7 @@ metadata:
 data:
   changegate.yaml: |
 {{ .Values.config | indent 4 }}
+{{- if .Values.policy }}
+  changegate.policy.yaml: |
+{{ .Values.policy | indent 4 }}
+{{- end }}

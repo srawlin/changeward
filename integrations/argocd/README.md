@@ -16,3 +16,23 @@ reviewers see the plan before merge.
 
 Direct changes to Argo-managed objects, for example during an incident, are flagged by the Kubernetes adapter
 ("managed by argocd"). Bring Git back in line afterwards with `changegate reconcile --k8s-dir ... --pr`.
+
+## Verified end to end
+
+Tested with Argo CD v3.5.5 in kind, with the executor deployed in-cluster from `deploy/helm/changegate-executor`
+(`rbac.kubernetes.enabled=true`, `namespaces: [shop]`). Its policy required SRE approval for production
+Kubernetes syncs. The GitOps repository was a private GitLab project.
+
+1. A new ConfigMap went through `builtin/ci-auto` (reversible, dry-run verified) and synced.
+2. A Git change to a feature flag failed the PreSync hook with the exact diff and "approval required".
+   `CHANGEGATE_EXECUTOR_URL=… CHANGEGATE_EXECUTOR_TOKEN=<approve-role token> changegate approve c_…` showed
+   the plan and approved it. Argo CD's next retry passed, and the new value was live.
+3. The gate's own token could not approve (it has only the propose role).
+
+Notes:
+
+- The hook Job is part of the app's manifests. `changegate k8s gate` drops Argo CD and Helm hook resources
+  from the plan, so the Job's `generateName` doesn't make every plan unique.
+- For a private repository, clone with a read-only token from the hook's Secret, e.g.
+  `https://oauth2:${GIT_TOKEN}@${REPO_URL#https://}`.
+- Give the application `syncPolicy.retry` with enough attempts for a human to approve.

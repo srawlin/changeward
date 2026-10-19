@@ -103,10 +103,15 @@ func (s *Server) local(r *http.Request) *backend.Local {
 func (s *Server) Handler() http.Handler {
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /healthz", func(w http.ResponseWriter, _ *http.Request) { _, _ = w.Write([]byte("ok\n")) })
+	// role may list alternatives ("propose|approve").
 	h := func(pattern, role string, fn func(http.ResponseWriter, *http.Request) (any, error)) {
 		mux.HandleFunc(pattern, s.auth(func(w http.ResponseWriter, r *http.Request) {
-			if !caller(r).has(role) {
-				writeErr(w, http.StatusForbidden, errors.New("token lacks the "+role+" role"))
+			ok := false
+			for _, alt := range strings.Split(role, "|") {
+				ok = ok || caller(r).has(alt)
+			}
+			if !ok {
+				writeErr(w, http.StatusForbidden, errors.New("token lacks the "+strings.ReplaceAll(role, "|", " or ")+" role"))
 				return
 			}
 			v, err := fn(w, r)
@@ -170,7 +175,8 @@ func (s *Server) Handler() http.Handler {
 		}
 		return s.local(r).Propose(r.Context(), in)
 	})
-	h("GET /v1/changes/{ref}", RolePropose, func(_ http.ResponseWriter, r *http.Request) (any, error) { return s.ownChange(r) })
+	// Approvers read what they approve.
+	h("GET /v1/changes/{ref}", RolePropose+"|"+RoleApprove, func(_ http.ResponseWriter, r *http.Request) (any, error) { return s.ownChange(r) })
 	h("POST /v1/changes/{ref}/apply", RolePropose, func(_ http.ResponseWriter, r *http.Request) (any, error) {
 		c, err := s.ownChange(r)
 		if err != nil {
