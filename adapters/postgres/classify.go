@@ -5,8 +5,8 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/srawlin/changegate/pkg/adapter"
 	pg "github.com/pganalyze/pg_query_go/v6"
+	"github.com/srawlin/changegate/pkg/adapter"
 	"google.golang.org/protobuf/reflect/protoreflect"
 )
 

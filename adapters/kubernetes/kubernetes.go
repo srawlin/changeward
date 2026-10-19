@@ -285,12 +285,43 @@ func strip(o Obj) Obj {
 	return c
 }
 
+// stateHash fingerprints an object's desired state (status and server-set
+// fields stripped), so controller status updates are not mistaken for drift.
+func stateHash(o Obj) string {
+	if o == nil {
+		return "absent"
+	}
+	b, _ := json.Marshal(strip(o))
+	sum := sha256.Sum256(b)
+	return hex.EncodeToString(sum[:8])
+}
+
 func resourceVersion(o Obj) string {
 	if o == nil {
 		return "absent"
 	}
 	md, _ := o["metadata"].(map[string]any)
 	return str(md["resourceVersion"])
+}
+
+// otherManagers lists field managers other than Changegate (ignoring
+// controllers that only write status).
+func otherManagers(o Obj) []string {
+	md, _ := o["metadata"].(map[string]any)
+	mf, _ := md["managedFields"].([]any)
+	seen := map[string]bool{}
+	var out []string
+	for _, e := range mf {
+		m, _ := e.(map[string]any)
+		name := str(m["manager"])
+		if name == "" || name == "changegate" || str(m["subresource"]) == "status" || seen[name] {
+			continue
+		}
+		seen[name] = true
+		out = append(out, name)
+	}
+	sort.Strings(out)
+	return out
 }
 
 // GitOpsOwner reports the GitOps controller managing an object, if any.
@@ -351,13 +382,15 @@ func short(v any) string {
 // step is one object in a plan.
 type step struct {
 	Ref    Ref    `json:"ref"`
-	Action string `json:"action"` // create, update, unchanged, delete, scale
-	PrevRV string `json:"prev_rv"`
+	Action string `json:"action"`           // create, update, unchanged, delete, scale
+	PrevRV string `json:"prev_state"`       // stateHash of the live object at plan time
 	Prev   Obj    `json:"prev,omitempty"`   // stripped live object before
 	Desire Obj    `json:"desire,omitempty"` // manifest to apply
 	Owner  string `json:"owner,omitempty"`
-	Diff   []string `json:"diff,omitempty"`
-	Replicas int  `json:"replicas,omitempty"`
+	// Managers are other field managers whose fields this change takes over.
+	Managers []string `json:"managers,omitempty"`
+	Diff     []string `json:"diff,omitempty"`
+	Replicas int      `json:"replicas,omitempty"`
 }
 
 type planData struct {
@@ -413,7 +446,7 @@ func (a *Adapter) Plan(ctx context.Context, t adapter.Target, op adapter.Operati
 				return nil, fmt.Errorf("%s not found", r)
 			}
 			r.APIVersion = str(live["apiVersion"])
-			s := step{Ref: r, Action: cmd.Verb, PrevRV: resourceVersion(live), Prev: strip(live), Owner: GitOpsOwner(live), Replicas: cmd.Replicas}
+			s := step{Ref: r, Action: cmd.Verb, PrevRV: stateHash(live), Prev: strip(live), Owner: GitOpsOwner(live), Replicas: cmd.Replicas}
 			if cmd.Verb == "scale" {
 				spec, _ := s.Prev["spec"].(map[string]any)
 				s.Diff = []string{fmt.Sprintf("spec.replicas: %v → %d", spec["replicas"], cmd.Replicas)}
@@ -438,7 +471,7 @@ func (a *Adapter) Plan(ctx context.Context, t adapter.Target, op adapter.Operati
 				return nil, err
 			}
 			manifest, _ := json.Marshal(o)
-			out, err := kubectl(ctx, t, manifest, "apply", "--server-side", "--dry-run=server", "--field-manager=changegate", "-o", "json", "-f", "-")
+			out, err := kubectl(ctx, t, manifest, "apply", "--server-side", "--force-conflicts", "--dry-run=server", "--field-manager=changegate", "-o", "json", "-f", "-")
 			if err != nil {
 				return nil, fmt.Errorf("server-side dry run of %s: %w", r, err)
 			}
@@ -446,11 +479,11 @@ func (a *Adapter) Plan(ctx context.Context, t adapter.Target, op adapter.Operati
 			if err := json.Unmarshal(out, &dry); err != nil {
 				return nil, err
 			}
-			s := step{Ref: r, PrevRV: resourceVersion(live), Desire: o}
+			s := step{Ref: r, PrevRV: stateHash(live), Desire: o}
 			if live == nil {
 				s.Action = "create"
 			} else {
-				s.Prev, s.Owner = strip(live), GitOpsOwner(live)
+				s.Prev, s.Owner, s.Managers = strip(live), GitOpsOwner(live), otherManagers(live)
 				diffObjects(s.Prev, strip(dry), "", &s.Diff)
 				s.Action = "update"
 				if len(s.Diff) == 0 {
@@ -487,12 +520,17 @@ func (a *Adapter) Plan(ctx context.Context, t adapter.Target, op adapter.Operati
 				p.Warnings = append(p.Warnings, fmt.Sprintf("deleting %s destroys its data or every object in it; take a VolumeSnapshot or backup first", s.Ref))
 			}
 		}
+		if len(s.Managers) > 0 && s.Action == "update" {
+			p.Warnings = append(p.Warnings, fmt.Sprintf("%s: takes over fields currently managed by %s", s.Ref, strings.Join(s.Managers, ", ")))
+		}
 		if s.Ref.Kind == "Secret" && s.Action != "unchanged" {
 			p.Warnings = append(p.Warnings, "Secret values are kept in the undo handle in the local store")
 		}
 		if s.Owner != "" && s.Owner != "helm" {
 			owners[s.Owner] = true
-			p.Warnings = append(p.Warnings, fmt.Sprintf("%s is managed by %s; a direct change will be reverted on the next sync. Change it in Git, or pause sync for the incident", s.Ref, s.Owner))
+			if op.Params["gitops_sync"] != "true" { // the GitOps gate plans the controller's own sync
+				p.Warnings = append(p.Warnings, fmt.Sprintf("%s is managed by %s; a direct change will be reverted on the next sync. Change it in Git, or pause sync for the incident", s.Ref, s.Owner))
+			}
 		}
 	}
 	if len(owners) > 0 {
@@ -520,7 +558,7 @@ func (a *Adapter) Plan(ctx context.Context, t adapter.Target, op adapter.Operati
 type undoStep struct {
 	Ref    Ref    `json:"ref"`
 	Prev   Obj    `json:"prev,omitempty"` // nil: did not exist
-	PostRV string `json:"post_rv"`        // resourceVersion right after apply ("absent" after delete)
+	PostRV string `json:"post_state"`     // stateHash right after apply ("absent" after delete)
 }
 
 type undoHandle struct {
@@ -539,7 +577,7 @@ func (a *Adapter) Apply(ctx context.Context, t adapter.Target, p *adapter.Plan) 
 		if err != nil {
 			return nil, err
 		}
-		if resourceVersion(live) != s.PrevRV {
+		if stateHash(live) != s.PrevRV {
 			return nil, &adapter.ConflictError{Reason: "objects changed since plan; re-plan required", Conflicts: []string{s.Ref.String()}}
 		}
 	}
@@ -560,13 +598,13 @@ func (a *Adapter) Apply(ctx context.Context, t adapter.Target, p *adapter.Plan) 
 			uh.Steps = append(uh.Steps, undoStep{Ref: s.Ref, Prev: s.Prev, PostRV: "absent"})
 		default: // create, update, scale
 			manifest, _ := json.Marshal(s.Desire)
-			res, err := kubectl(ctx, t, manifest, "apply", "--server-side", "--field-manager=changegate", "--force-conflicts=false", "-o", "json", "-f", "-")
+			res, err := kubectl(ctx, t, manifest, "apply", "--server-side", "--force-conflicts", "--field-manager=changegate", "-o", "json", "-f", "-")
 			if err != nil {
 				return a.partial(ctx, t, p, uh, err)
 			}
 			var o Obj
 			_ = json.Unmarshal(res, &o)
-			uh.Steps = append(uh.Steps, undoStep{Ref: s.Ref, Prev: s.Prev, PostRV: resourceVersion(o)})
+			uh.Steps = append(uh.Steps, undoStep{Ref: s.Ref, Prev: s.Prev, PostRV: stateHash(o)})
 		}
 		out = append(out, s.Action+" "+s.Ref.String())
 	}
@@ -599,7 +637,7 @@ func (a *Adapter) Undo(ctx context.Context, t adapter.Target, _ *adapter.Plan, r
 		if err != nil {
 			return nil, err
 		}
-		if resourceVersion(live) != s.PostRV {
+		if stateHash(live) != s.PostRV {
 			conflicts = append(conflicts, s.Ref.String()+" changed since apply")
 		}
 	}
@@ -619,7 +657,7 @@ func (a *Adapter) Undo(ctx context.Context, t adapter.Target, _ *adapter.Plan, r
 			}
 		case s.PostRV == "absent": // was deleted: re-create it
 			b, _ := json.Marshal(s.Prev)
-			if _, err := kubectl(ctx, t, b, "create", "-f", "-"); err != nil {
+			if _, err := kubectl(ctx, t, b, "create", "--field-manager=changegate", "-f", "-"); err != nil {
 				return nil, err
 			}
 		default: // was updated: put the previous object back exactly
@@ -630,7 +668,7 @@ func (a *Adapter) Undo(ctx context.Context, t adapter.Target, _ *adapter.Plan, r
 			prev := strip(s.Prev)
 			prev["metadata"].(map[string]any)["resourceVersion"] = resourceVersion(live)
 			b, _ := json.Marshal(prev)
-			if _, err := kubectl(ctx, t, b, "replace", "-f", "-"); err != nil {
+			if _, err := kubectl(ctx, t, b, "replace", "--field-manager=changegate", "-f", "-"); err != nil {
 				return nil, err
 			}
 		}

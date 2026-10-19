@@ -10,19 +10,28 @@ import (
 	"strings"
 	"time"
 
+	"github.com/spf13/cobra"
+	"github.com/srawlin/changegate/adapters/kubernetes"
 	"github.com/srawlin/changegate/adapters/postgres"
 	"github.com/srawlin/changegate/internal/migrations"
 	"github.com/srawlin/changegate/internal/model"
 	"github.com/srawlin/changegate/internal/session"
-	"github.com/spf13/cobra"
 )
 
-func promoteCmd() *cobra.Command {
-	var framework, dir, name, base string
+func promoteCmd() *cobra.Command { return promoteLike(false) }
+
+func reconcileCmd() *cobra.Command { return promoteLike(true) }
+
+func promoteLike(reconcile bool) *cobra.Command {
+	var framework, dir, name, base, k8sDir string
 	var includeData, pr, dryRun bool
+	use, short := "promote [SESSION]", "Turn a session's changes into migration files and manifests (and optionally a PR)"
+	if reconcile {
+		use, short = "reconcile [SESSION]", "Open a reconciliation PR for direct changes made to a Git-managed system (keeps Git the source of truth)"
+	}
 	cmd := &cobra.Command{
-		Use:   "promote [SESSION]",
-		Short: "Turn a session's changes into migration files (and optionally a PR)",
+		Use:   use,
+		Short: short,
 		Long: `Promote converts the applied changes of a direct-lane session into a migration
 for the project's framework (detected from the repository; override with
 --framework/--dir). Up is the SQL as written; down is generated from the
@@ -51,19 +60,33 @@ Writable frameworks: ` + strings.Join(migrations.Writable, ", "),
 			if err != nil {
 				return err
 			}
-			var applied []*model.Change
+			var applied, k8sChanges []*model.Change
 			for _, c := range changes {
-				if session.Applied(c) && c.Plan != nil && c.Plan.Adapter == "postgres" {
+				if !session.Applied(c) || c.Plan == nil {
+					continue
+				}
+				switch c.Plan.Adapter {
+				case "postgres":
 					applied = append(applied, c)
+				case "kubernetes":
+					k8sChanges = append(k8sChanges, c)
 				}
 			}
-			if len(applied) == 0 {
-				return fmt.Errorf("session %s has no applied Postgres changes to promote", s.ID)
+			if len(applied) == 0 && len(k8sChanges) == 0 {
+				return fmt.Errorf("session %s has no applied Postgres or Kubernetes changes to promote", s.ID)
 			}
 			root := repoRoot(a.cfg.Dir)
-			set, err := chooseSet(root, framework, dir)
-			if err != nil {
-				return err
+			if reconcile && s.IncidentRef == "" && s.Env != "personal" {
+				fmt.Fprintln(os.Stderr, "note: this session has no incident reference")
+			}
+			var set *migrations.Set
+			if len(applied) > 0 {
+				if set, err = chooseSet(root, framework, dir); err != nil {
+					return err
+				}
+			}
+			if len(k8sChanges) > 0 && k8sDir == "" {
+				return errors.New("the session changed Kubernetes objects: pass --k8s-dir (the manifests directory in this repository)")
 			}
 			m := migrations.NewMigration{Name: name, Header: []string{
 				fmt.Sprintf("Promoted by Changegate from session %s (%s, agent %s, user %s).", s.ID, s.Target, orDash(s.Principal.Agent), strings.TrimPrefix(s.Principal.Human, "user:")),
@@ -85,14 +108,31 @@ Writable frameworks: ` + strings.Join(migrations.Writable, ", "),
 				_, down, _, _ := postgres.MigrationSteps(applied[i].Operation.Payload, applied[i].Receipt.UndoHandle, includeData)
 				m.Down = append(m.Down, down...)
 			}
-			if len(m.Up) == 0 {
+			var manifests []kubernetes.ManifestFile
+			for _, c := range k8sChanges {
+				mf, err := kubernetes.ManifestsForPromotion(c.Plan.AdapterData)
+				if err != nil {
+					return err
+				}
+				manifests = append(manifests, mf...)
+			}
+			if len(m.Up) == 0 && len(manifests) == 0 {
 				return errors.New("nothing to promote: the session's changes were data-only (use --include-data)")
 			}
 			if m.Name == "" {
 				m.Name = "changegate_" + s.ID
 			}
 			if dryRun {
-				fmt.Printf("framework %s in %s\n-- up\n%s\n-- down\n%s\n", set.Framework, set.Dir, strings.Join(m.Up, ";\n"), strings.Join(m.Down, ";\n"))
+				if set != nil {
+					fmt.Printf("framework %s in %s\n-- up\n%s\n-- down\n%s\n", set.Framework, set.Dir, strings.Join(m.Up, ";\n"), strings.Join(m.Down, ";\n"))
+				}
+				for _, mf := range manifests {
+					if mf.Delete {
+						fmt.Printf("remove %s\n", filepath.Join(k8sDir, mf.Path))
+					} else {
+						fmt.Printf("write %s:\n%s", filepath.Join(k8sDir, mf.Path), mf.YAML)
+					}
+				}
 				for _, n := range notes {
 					fmt.Println("note:", n)
 				}
@@ -101,13 +141,35 @@ Writable frameworks: ` + strings.Join(migrations.Writable, ", "),
 			branch := ""
 			if pr {
 				branch = "changegate/promote-" + strings.TrimPrefix(s.ID, "s_")
+				if reconcile {
+					branch = "changegate/reconcile-" + strings.TrimPrefix(s.ID, "s_")
+				}
 				if err := git(root, "checkout", "-b", branch); err != nil {
 					return err
 				}
 			}
-			files, err := migrations.Write(root, set.Framework, set.Dir, set, m, time.Now())
-			if err != nil {
-				return err
+			var files []string
+			if set != nil && len(m.Up) > 0 {
+				if files, err = migrations.Write(root, set.Framework, set.Dir, set, m, time.Now()); err != nil {
+					return err
+				}
+			}
+			for _, mf := range manifests {
+				rel := filepath.Join(k8sDir, mf.Path)
+				full := filepath.Join(root, rel)
+				if mf.Delete {
+					if err := os.Remove(full); err != nil && !os.IsNotExist(err) {
+						return err
+					}
+				} else {
+					if err := os.MkdirAll(filepath.Dir(full), 0o755); err != nil {
+						return err
+					}
+					if err := os.WriteFile(full, []byte(mf.YAML), 0o644); err != nil {
+						return err
+					}
+				}
+				files = append(files, rel)
 			}
 			for _, f := range files {
 				fmt.Println("wrote", f)
@@ -115,12 +177,20 @@ Writable frameworks: ` + strings.Join(migrations.Writable, ", "),
 			for _, n := range notes {
 				fmt.Println("note:", n)
 			}
-			_ = svc.Store.AppendEvent(ctx, &model.Event{Type: "session.promoted", SessionID: s.ID, Actor: humanIdentity(), Reason: strings.Join(files, ", ")})
+			evType := "session.promoted"
+			if reconcile {
+				evType = "session.reconciled"
+			}
+			_ = svc.Store.AppendEvent(ctx, &model.Event{Type: evType, SessionID: s.ID, Actor: humanIdentity(), Reason: strings.Join(files, ", ")})
 			if !pr {
 				fmt.Println("next: review the files, commit them, and open a PR (or re-run with --pr)")
 				return nil
 			}
-			return openPR(root, branch, base, s, applied, files, notes, set.Framework)
+			fw := "Kubernetes"
+			if set != nil {
+				fw = set.Framework
+			}
+			return openPR(root, branch, base, s, append(applied, k8sChanges...), files, notes, fw, reconcile)
 		},
 	}
 	cmd.Flags().StringVar(&framework, "framework", "", "migration framework (default: detected)")
@@ -130,6 +200,7 @@ Writable frameworks: ` + strings.Join(migrations.Writable, ", "),
 	cmd.Flags().BoolVar(&includeData, "include-data", false, "include data changes (DML) in the migration")
 	cmd.Flags().BoolVar(&pr, "pr", false, "commit on a new branch and open a pull request (needs git and gh)")
 	cmd.Flags().BoolVar(&dryRun, "dry-run", false, "print the migration instead of writing it")
+	cmd.Flags().StringVar(&k8sDir, "k8s-dir", "", "manifests directory for Kubernetes changes, relative to the repository root")
 	return cmd
 }
 
@@ -178,11 +249,21 @@ func git(dir string, args ...string) error {
 	return nil
 }
 
-func openPR(root, branch, base string, s *model.Session, changes []*model.Change, files, notes []string, framework string) error {
-	if err := git(root, append([]string{"add"}, files...)...); err != nil {
+func openPR(root, branch, base string, s *model.Session, changes []*model.Change, files, notes []string, framework string, reconcile bool) error {
+	if err := git(root, append([]string{"add", "-A", "--"}, files...)...); err != nil {
 		return err
 	}
-	msg := fmt.Sprintf("Promote Changegate session %s to a %s migration\n\nChangegate-Session: %s\nChangegate-Agent: %s", s.ID, framework, s.ID, orDash(s.Principal.Agent))
+	title := fmt.Sprintf("Promote Changegate session %s (%s)", s.ID, framework)
+	if reconcile {
+		title = fmt.Sprintf("Reconcile direct changes from %s on %s", s.ID, s.Target)
+		if s.IncidentRef != "" {
+			title += " (" + s.IncidentRef + ")"
+		}
+	}
+	msg := fmt.Sprintf("%s\n\nChangegate-Session: %s\nChangegate-Agent: %s", title, s.ID, orDash(s.Principal.Agent))
+	if s.IncidentRef != "" {
+		msg += "\nChangegate-Incident: " + s.IncidentRef
+	}
 	if err := git(root, "commit", "-m", msg); err != nil {
 		return err
 	}
@@ -194,7 +275,12 @@ func openPR(root, branch, base string, s *model.Session, changes []*model.Change
 		return err
 	}
 	var body strings.Builder
-	fmt.Fprintf(&body, "Promoted from Changegate session `%s` on `%s` (agent: %s, user: %s).\n\n", s.ID, s.Target, orDash(s.Principal.Agent), strings.TrimPrefix(s.Principal.Human, "user:"))
+	if reconcile {
+		fmt.Fprintf(&body, "**Reconciliation:** these changes were applied directly to `%s` (%s) in session `%s`%s. This PR brings Git back in line with the live system; until it merges, the system has drifted from Git.\n\n",
+			s.Target, s.Env, s.ID, map[bool]string{true: " for incident " + s.IncidentRef, false: ""}[s.IncidentRef != ""])
+	} else {
+		fmt.Fprintf(&body, "Promoted from Changegate session `%s` on `%s` (agent: %s, user: %s).\n\n", s.ID, s.Target, orDash(s.Principal.Agent), strings.TrimPrefix(s.Principal.Human, "user:"))
+	}
 	body.WriteString("### Session timeline\n\n| # | change | reversibility | rows | state |\n|---|---|---|---|---|\n")
 	for i, c := range changes {
 		fmt.Fprintf(&body, "| %d | `%s` | %s | %d | %s |\n", i+1, strings.ReplaceAll(shortSQL(c), "|", "\\|"), c.Plan.Reversibility, c.Plan.BlastRows, c.State)
@@ -206,7 +292,7 @@ func openPR(root, branch, base string, s *model.Session, changes []*model.Change
 		}
 	}
 	body.WriteString("\nThe down migration was generated from the undo handles recorded when these changes were applied and undone-tested in the session. Lane A rehearsal will run forward → rollback → compare on this PR.\n\n<!-- changegate-session: " + s.ID + " -->\n")
-	args := []string{"pr", "create", "--title", "Promote Changegate session " + s.ID, "--body", body.String(), "--head", branch}
+	args := []string{"pr", "create", "--title", title, "--body", body.String(), "--head", branch}
 	if base != "" {
 		args = append(args, "--base", base)
 	}

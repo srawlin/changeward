@@ -7,6 +7,10 @@ import (
 	"os/user"
 	"sync"
 
+	"github.com/srawlin/changegate/adapters/configfile"
+	"github.com/srawlin/changegate/adapters/httpapi"
+	"github.com/srawlin/changegate/adapters/kubernetes"
+	"github.com/srawlin/changegate/adapters/mysql"
 	"github.com/srawlin/changegate/adapters/postgres"
 	"github.com/srawlin/changegate/adapters/terraform"
 	"github.com/srawlin/changegate/adapters/toykv"
@@ -16,6 +20,7 @@ import (
 	"github.com/srawlin/changegate/internal/policy"
 	"github.com/srawlin/changegate/internal/signals"
 	"github.com/srawlin/changegate/internal/store"
+	"github.com/srawlin/changegate/internal/telemetry"
 	"github.com/srawlin/changegate/pkg/adapter"
 )
 
@@ -82,6 +87,17 @@ func (a *app) engine() (*engine.Engine, error) {
 	if n := a.notifier(); n != nil {
 		a.eng.Notifier = n
 	}
+	endpoint := a.cfg.Telemetry.OTLPEndpoint
+	if endpoint == "" {
+		endpoint = os.Getenv("OTEL_EXPORTER_OTLP_ENDPOINT")
+	}
+	if endpoint != "" {
+		h := map[string]string{}
+		for k, v := range a.cfg.Telemetry.Headers {
+			h[k] = os.ExpandEnv(v)
+		}
+		a.eng.Observer = telemetry.NewExporter(os.ExpandEnv(endpoint), h)
+	}
 	if j := a.cfg.Signals.Jev; j != nil && j.Enabled {
 		key := os.ExpandEnv(j.APIKey)
 		if key == "" {
@@ -108,9 +124,13 @@ func (a *app) engine() (*engine.Engine, error) {
 func (a *app) registry() *registry {
 	if a.reg == nil {
 		a.reg = &registry{cfg: a.cfg, builtin: map[string]adapter.Adapter{
-			"postgres":  postgres.New(postgres.Options{StateDir: a.cfg.StateDir()}),
-			"toykv":     toykv.New(),
-			"terraform": terraform.New(a.cfg.StateDir()),
+			"postgres":   postgres.New(postgres.Options{StateDir: a.cfg.StateDir()}),
+			"toykv":      toykv.New(),
+			"terraform":  terraform.New(a.cfg.StateDir()),
+			"kubernetes": kubernetes.New(),
+			"mysql":      mysql.New(),
+			"configfile": configfile.New(),
+			"httpapi":    httpapi.New(),
 		}, plugins: map[string]*adapter.Plugin{}}
 		a.closers = append(a.closers, a.reg.close)
 	}

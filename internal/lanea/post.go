@@ -93,7 +93,10 @@ func GitHubFromEnv() (*GitHub, error) {
 }
 
 // Comment creates or updates the Changegate comment on the PR.
-func (g *GitHub) Comment(body string) (string, error) {
+func (g *GitHub) Comment(body string) (string, error) { return g.CommentWithMarker(body, Marker) }
+
+// CommentWithMarker creates or updates the comment containing marker.
+func (g *GitHub) CommentWithMarker(body, marker string) (string, error) {
 	if g.PR == 0 {
 		return "", errors.New("github: not a pull request (no PR number)")
 	}
@@ -110,7 +113,7 @@ func (g *GitHub) Comment(body string) (string, error) {
 		HTMLURL string `json:"html_url"`
 	}
 	for _, c := range comments {
-		if strings.Contains(c.Body, Marker) {
+		if strings.Contains(c.Body, marker) {
 			err := doJSON("PATCH", fmt.Sprintf("%s/repos/%s/issues/comments/%d", g.API, g.Repo, c.ID), g.Token, "", map[string]string{"body": body}, &out)
 			return out.HTMLURL, err
 		}

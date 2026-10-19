@@ -14,8 +14,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/srawlin/changegate/pkg/adapter"
 	"github.com/jackc/pgx/v5"
+	"github.com/srawlin/changegate/pkg/adapter"
 )
 
 // Checkpoint strategies.
@@ -26,9 +26,9 @@ const (
 )
 
 type checkpointData struct {
-	Strategy string `json:"strategy"`
-	Database string `json:"database,omitempty"` // template strategy: the copy's name
-	File     string `json:"file,omitempty"`     // dump strategy
+	Strategy string   `json:"strategy"`
+	Database string   `json:"database,omitempty"` // template strategy: the copy's name
+	File     string   `json:"file,omitempty"`     // dump strategy
 	Neon     *neonRef `json:"neon,omitempty"`
 }
 

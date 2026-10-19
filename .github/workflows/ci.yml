@@ -19,11 +19,26 @@ jobs:
         env: { POSTGRES_PASSWORD: pg }
         ports: ["55416:5432"]
         options: --health-cmd pg_isready --health-interval 2s --health-retries 30
+      mysql:
+        image: mysql:8.4
+        env: { MYSQL_ROOT_PASSWORD: pg }
+        ports: ["53306:3306"]
+        options: --health-cmd "mysqladmin ping -ppg" --health-interval 3s --health-retries 40
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-go@v5
         with: { go-version-file: go.mod }
+      - uses: hashicorp/setup-terraform@v3
+        with: { terraform_wrapper: false }
+      - uses: helm/kind-action@v1
+        with: { cluster_name: changegate }
       - run: go vet ./...
       - run: go test -race ./...
+      - name: SDK tests (Python, TypeScript) against a live executor
+        run: |
+          go build -o bin/changegate ./cmd/changegate
+          (cd sdk/python && PYTHONPATH=src python3 -m unittest -v tests.test_sdk)
+          (cd sdk/typescript && node --experimental-strip-types --test test/*.test.ts)
+          (cd integrations/contextforge && python3 -m unittest -v tests.test_plugin)
       - uses: golangci/golangci-lint-action@v8
         with: { version: v2.15.0 }

@@ -1,0 +1,41 @@
+{{- /* Permissions for kubernetes targets (in-cluster credentials). */}}
+{{- if .Values.rbac.kubernetes.enabled }}
+{{- if .Values.rbac.kubernetes.clusterWide }}
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: {{ include "cg.name" . }}
+  labels: {{- include "cg.labels" . | nindent 4 }}
+rules: {{- toYaml .Values.rbac.kubernetes.rules | nindent 2 }}
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: {{ include "cg.name" . }}
+  labels: {{- include "cg.labels" . | nindent 4 }}
+roleRef: { apiGroup: rbac.authorization.k8s.io, kind: ClusterRole, name: {{ include "cg.name" . }} }
+subjects:
+  - { kind: ServiceAccount, name: {{ include "cg.serviceAccountName" . }}, namespace: {{ .Release.Namespace }} }
+{{- else }}
+{{- range .Values.rbac.kubernetes.namespaces }}
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: {{ include "cg.name" $ }}
+  namespace: {{ . }}
+  labels: {{- include "cg.labels" $ | nindent 4 }}
+rules: {{- toYaml $.Values.rbac.kubernetes.rules | nindent 2 }}
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: {{ include "cg.name" $ }}
+  namespace: {{ . }}
+  labels: {{- include "cg.labels" $ | nindent 4 }}
+roleRef: { apiGroup: rbac.authorization.k8s.io, kind: Role, name: {{ include "cg.name" $ }} }
+subjects:
+  - { kind: ServiceAccount, name: {{ include "cg.serviceAccountName" $ }}, namespace: {{ $.Release.Namespace }} }
+{{- end }}
+{{- end }}
+{{- end }}

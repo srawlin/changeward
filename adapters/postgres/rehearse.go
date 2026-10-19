@@ -12,8 +12,8 @@ import (
 	"sync"
 	"time"
 
-	"github.com/srawlin/changegate/pkg/adapter"
 	"github.com/jackc/pgx/v5"
+	"github.com/srawlin/changegate/pkg/adapter"
 )
 
 // Rehearsal tiers (plan §5.3.1).
@@ -101,18 +101,18 @@ type MigrationResult struct {
 
 // RehearsalReport is the evidence for a rehearsal.
 type RehearsalReport struct {
-	Tier          string            `json:"tier"`
-	Database      string            `json:"database"`
-	ServerVersion int               `json:"server_version"`
-	BaseCount     int               `json:"base_migrations"`
-	Results       []MigrationResult `json:"results"`
-	Passed        bool              `json:"passed"`
+	Tier          string                `json:"tier"`
+	Database      string                `json:"database"`
+	ServerVersion int                   `json:"server_version"`
+	BaseCount     int                   `json:"base_migrations"`
+	Results       []MigrationResult     `json:"results"`
+	Passed        bool                  `json:"passed"`
 	Reversibility adapter.Reversibility `json:"reversibility"`
-	Destructive   bool              `json:"destructive"`
-	BlastRows     int64             `json:"blast_rows"`
-	StartedAt     string            `json:"started_at"`
-	DurationMs    int64             `json:"duration_ms"`
-	Notes         []string          `json:"notes,omitempty"`
+	Destructive   bool                  `json:"destructive"`
+	BlastRows     int64                 `json:"blast_rows"`
+	StartedAt     string                `json:"started_at"`
+	DurationMs    int64                 `json:"duration_ms"`
+	Notes         []string              `json:"notes,omitempty"`
 }
 
 // RehearseMigrations builds a copy, applies base migrations (or loads a
@@ -238,7 +238,9 @@ func provision(ctx context.Context, o *RehearsalOptions, rep *RehearsalReport) (
 	}, nil
 }
 
-func catalogSnap(ctx context.Context, q querier) (*Snapshot, error) { return TakeSnapshot(ctx, q, false, nil) }
+func catalogSnap(ctx context.Context, q querier) (*Snapshot, error) {
+	return TakeSnapshot(ctx, q, false, nil)
+}
 
 // checksums returns per-table data checksums for the named tables.
 func checksums(ctx context.Context, q querier, tables []string) (map[string]TableData, error) {

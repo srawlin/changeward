@@ -1,0 +1,36 @@
+# Envoy HTTP filter: send every MCP request through Changegate before it
+# reaches the upstream MCP server. Reads pass; SQL writes to known database
+# tools are blocked (use Changegate's own MCP tools); other tool calls are
+# decided by policy as approval-only changes and audited. Denials reach the
+# client as a JSON-RPC error with the reason. Verified with Envoy 1.36 in front
+# of the reference "everything" MCP server and the official Python MCP client.
+# Envoy forwards only Host/Method/Path/Content-Length/Authorization from the
+# client by default, so a client cannot set the x-changegate-* headers itself.
+http_filters:
+  - name: envoy.filters.http.ext_authz
+    typed_config:
+      "@type": type.googleapis.com/envoy.extensions.filters.http.ext_authz.v3.ExtAuthz
+      transport_api_version: V3
+      failure_mode_allow: false            # fail closed
+      with_request_body:
+        max_request_bytes: 1048576
+        allow_partial_message: false
+      http_service:
+        server_uri:
+          uri: http://changegate-executor.changegate.svc:8443
+          cluster: changegate_executor
+          timeout: 2s
+        path_prefix: /v1/authz/mcp          # Envoy appends the original path; the executor ignores it
+        authorization_request:
+          headers_to_add:
+            - { key: x-changegate-token, value: "%ENVIRONMENT(CHANGEGATE_GATEWAY_TOKEN)%" }
+            - { key: x-changegate-server, value: postgres-mcp }
+            - { key: x-changegate-env, value: prod }
+            # Tools of this server that only read: allowed and audited without a policy decision.
+            - { key: x-changegate-read-only-tools, value: "query,list_*,get_*,describe_*" }
+        authorization_response:
+          allowed_client_headers:
+            # The denial body is a JSON-RPC error carrying the reason; keep its content type.
+            patterns: [{ exact: x-changegate-decision }, { exact: content-type }]
+  - name: envoy.filters.http.router
+    typed_config: { "@type": type.googleapis.com/envoy.extensions.filters.http.router.v3.Router }

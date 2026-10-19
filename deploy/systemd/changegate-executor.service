@@ -1,0 +1,22 @@
+[Unit]
+Description=Changegate shared executor
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+User=changegate
+Group=changegate
+Environment=CHANGEGATE_CONFIG=/etc/changegate/changegate.yaml
+Environment=CHANGEGATE_STORE=/var/lib/changegate/changegate.db
+EnvironmentFile=-/etc/changegate/env
+ExecStart=/usr/local/bin/changegate executor serve --addr 127.0.0.1:8443
+Restart=on-failure
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+PrivateTmp=true
+ReadWritePaths=/var/lib/changegate
+StateDirectory=changegate
+
+[Install]
+WantedBy=multi-user.target

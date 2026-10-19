@@ -16,8 +16,8 @@ import (
 // Decision is a hook verdict.
 type Decision struct {
 	// Permission is "allow", "deny" or "ask".
-	Permission string
-	Reason     string
+	Permission string `json:"permission"`
+	Reason     string `json:"reason,omitempty"`
 }
 
 // Target is what the hook knows about a registered target.
@@ -137,10 +137,17 @@ func evaluateOne(c, line string, targets []Target) Decision {
 		return evaluatePsql(c+" "+pipedPsql(line), w[1:], targets)
 	case "kubectl", "oc":
 		if len(w) > 1 && oneOf(w[1], "apply", "delete", "patch", "replace", "scale", "edit", "create", "rollout", "set", "label", "annotate", "drain", "cordon", "taint") {
-			return Decision{"ask", "kubectl " + w[1] + " changes a cluster directly; Changegate's Kubernetes adapter is not configured, so confirm manually"}
+			if t, ok := firstOf(targets, "kubernetes"); ok {
+				return Decision{"deny", fmt.Sprintf("kubectl %s changes the cluster without a preview or undo. Use Changegate instead: "+
+					"`changegate exec --target %s -f manifest.yaml` for apply, or `changegate exec --target %s \"delete deploy/NAME\"` / \"scale deploy/NAME --replicas=N\"", w[1], t.Name, t.Name)}
+			}
+			return Decision{"ask", "kubectl " + w[1] + " changes a cluster directly; no Kubernetes target is registered with Changegate, so confirm manually"}
 		}
 	case "terraform", "tofu":
 		if len(w) > 1 && oneOf(w[1], "apply", "destroy", "import", "state") {
+			if t, ok := firstOf(targets, "terraform"); ok && oneOf(w[1], "apply", "destroy") {
+				return Decision{"deny", fmt.Sprintf("%s %s bypasses Changegate's plan review and undo. Run `changegate exec --target %s %s` instead.", base(w[0]), w[1], t.Name, w[1])}
+			}
 			return Decision{"ask", base(w[0]) + " " + w[1] + " changes infrastructure directly; confirm manually (run plan first)"}
 		}
 	case "helm":
@@ -157,6 +164,15 @@ func evaluateOne(c, line string, targets []Target) Decision {
 		}
 	}
 	return Decision{Permission: "allow"}
+}
+
+func firstOf(targets []Target, adapterName string) (Target, bool) {
+	for _, t := range targets {
+		if t.Adapter == adapterName {
+			return t, true
+		}
+	}
+	return Target{}, false
 }
 
 func oneOf(s string, xs ...string) bool {
@@ -247,6 +263,13 @@ func evaluatePsql(raw string, args []string, targets []Target) Decision {
 		return Decision{"ask", fmt.Sprintf("interactive psql session against target %q bypasses Changegate", t.Name)}
 	}
 	for _, sql := range sqls {
+		if strings.HasPrefix(strings.TrimSpace(sql), `\`) {
+			if !psqlMetaReadOnly(sql) {
+				return Decision{"deny", fmt.Sprintf("psql meta-command %q against target %q can change it or run scripts outside Changegate. "+
+					"Use the changegate MCP tools (propose_change, then apply_change) or `changegate exec`.", strings.Fields(sql)[0], t.Name)}
+			}
+			continue
+		}
 		_, stmts, err := postgres.Classify(sql)
 		if err != nil {
 			return Decision{"deny", fmt.Sprintf("Changegate could not parse this SQL (%v); fix it and use `changegate exec` or the propose_change tool", err)}
@@ -260,6 +283,31 @@ func evaluatePsql(raw string, args []string, targets []Target) Decision {
 		}
 	}
 	return Decision{Permission: "allow"}
+}
+
+// psqlMetaReadOnly reports whether a -c string made only of psql
+// meta-commands (\d customers, \dt, \l ...) is read-only. Scripts (\i),
+// shell escapes (\!), \copy, \gexec and large-object writes are not; nor is
+// anything unknown.
+func psqlMetaReadOnly(s string) bool {
+	for _, part := range strings.Split(s, `\\`) { // "\\" separates commands
+		part = strings.TrimSpace(part)
+		if part == "" {
+			continue
+		}
+		if !strings.HasPrefix(part, `\`) {
+			return false // SQL mixed in after a separator: not just meta-commands
+		}
+		cmd := strings.TrimSuffix(strings.Fields(part)[0][1:], "+")
+		switch {
+		case strings.HasPrefix(cmd, "d") && cmd != "do", cmd == "l", cmd == "list", cmd == "z", cmd == "conninfo", cmd == "x",
+			cmd == "timing", cmd == "echo", cmd == "q", cmd == "?", cmd == "h", cmd == "help", cmd == "sf", cmd == "sv", cmd == "encoding",
+			cmd == "pset", cmd == "a", cmd == "t", cmd == "C", cmd == "f", cmd == "H":
+		default:
+			return false
+		}
+	}
+	return true
 }
 
 // matchTarget decides whether a psql connection refers to a registered

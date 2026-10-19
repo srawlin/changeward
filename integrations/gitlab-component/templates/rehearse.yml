@@ -2,6 +2,10 @@ spec:
   inputs:
     version:
       default: latest
+      description: Release tag to download, "latest", or "preinstalled" when the job image already has changegate.
+    binary-url:
+      default: ""
+      description: Download the linux tarball from this URL instead of GitHub releases (e.g. a GitLab generic package; CI_JOB_TOKEN is sent to the same instance).
     stage:
       default: test
     postgres-version:
@@ -34,12 +38,18 @@ changegate-rehearse:
     - apk add --no-cache curl git tar coreutils bash >/dev/null
     - |
       arch=$(uname -m); case "$arch" in x86_64) arch=amd64;; aarch64) arch=arm64;; esac
-      v="$[[ inputs.version ]]"
-      if [ "$v" = "latest" ]; then base="https://github.com/srawlin/changegate/releases/latest/download"; else base="https://github.com/srawlin/changegate/releases/download/$v"; fi
-      curl -fsSL "$base/changegate_linux_${arch}.tar.gz" -o /tmp/cg.tgz
-      curl -fsSL "$base/checksums.txt" -o /tmp/checksums.txt
-      (cd /tmp && grep " changegate_linux_${arch}.tar.gz\$" checksums.txt | sed "s| changegate_linux_${arch}.tar.gz| cg.tgz|" | sha256sum -c -)
-      tar -xzf /tmp/cg.tgz -C /usr/local/bin changegate
+      v="$[[ inputs.version ]]"; u="$[[ inputs.binary-url ]]"
+      if [ -n "$u" ]; then
+        case "$u" in "$CI_SERVER_URL"/*) curl -fsSL -H "JOB-TOKEN: $CI_JOB_TOKEN" "$u" -o /tmp/cg.tgz ;; *) curl -fsSL "$u" -o /tmp/cg.tgz ;; esac
+        tar -xzf /tmp/cg.tgz -C /usr/local/bin changegate
+      elif [ "$v" != "preinstalled" ]; then
+        if [ "$v" = "latest" ]; then base="https://github.com/srawlin/changegate/releases/latest/download"; else base="https://github.com/srawlin/changegate/releases/download/$v"; fi
+        curl -fsSL "$base/changegate_linux_${arch}.tar.gz" -o /tmp/cg.tgz
+        curl -fsSL "$base/checksums.txt" -o /tmp/checksums.txt
+        (cd /tmp && grep " changegate_linux_${arch}.tar.gz\$" checksums.txt | sed "s| changegate_linux_${arch}.tar.gz| cg.tgz|" | sha256sum -c -)
+        tar -xzf /tmp/cg.tgz -C /usr/local/bin changegate
+      fi
+      changegate version
   script:
     - git fetch --no-tags origin "$CI_MERGE_REQUEST_TARGET_BRANCH_NAME"
     - |
@@ -51,7 +61,8 @@ changegate-rehearse:
       cat changegate-report.md
       [ "$code" -gt 1 ] && exit "$code"
       if [ -n "${CHANGEGATE_GITLAB_TOKEN:-}${GITLAB_TOKEN:-}" ]; then changegate report changegate-evidence.json --gitlab --status || true; fi
-      changegate gate changegate-evidence.json; g=$?
+      gargs=""; [ -n "${CHANGEGATE_GITLAB_TOKEN:-}${GITLAB_TOKEN:-}" ] && gargs="--gitlab"   # MR approvals satisfy "review required"
+      changegate gate changegate-evidence.json $gargs; g=$?
       case "$[[ inputs.mode ]]:$g" in
         report:*) exit 0 ;; gate:0) exit 0 ;; gate:*) exit 1 ;; deny-only:3|deny-only:1) exit 1 ;; *) exit 0 ;;
       esac

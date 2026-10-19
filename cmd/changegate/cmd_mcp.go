@@ -1,24 +1,32 @@
 package main
 
 import (
+	_ "embed"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
+	"io/fs"
 	"os"
 	"os/signal"
 	"path/filepath"
+	"strings"
 	"syscall"
 
+	"github.com/spf13/cobra"
 	"github.com/srawlin/changegate/adapters/postgres"
+	"github.com/srawlin/changegate/internal/executor"
 	"github.com/srawlin/changegate/internal/hooks"
 	"github.com/srawlin/changegate/internal/mcpproxy"
 	"github.com/srawlin/changegate/internal/mcpserver"
 	"github.com/srawlin/changegate/internal/model"
-	"github.com/spf13/cobra"
 )
 
 func (a *app) mcpServer(target string, checkpoint, branch bool, sessionID string) (*mcpserver.Server, error) {
+	return a.mcpServerFor("postgres", target, checkpoint, branch, sessionID)
+}
+
+func (a *app) mcpServerFor(adapterName, target string, checkpoint, branch bool, sessionID string) (*mcpserver.Server, error) {
 	eng, err := a.engine()
 	if err != nil {
 		return nil, err
@@ -27,9 +35,13 @@ func (a *app) mcpServer(target string, checkpoint, branch bool, sessionID string
 	if err != nil {
 		return nil, err
 	}
-	pg, err := a.registry().Adapter("postgres")
+	ad, err := a.registry().Adapter(adapterName)
 	if err != nil {
 		return nil, err
+	}
+	q, ok := ad.(mcpserver.Querier)
+	if !ok {
+		return nil, fmt.Errorf("adapter %s has no MCP server", adapterName)
 	}
 	if target != "" {
 		if _, err := a.cfg.Resolve(target); err != nil {
@@ -38,12 +50,12 @@ func (a *app) mcpServer(target string, checkpoint, branch bool, sessionID string
 	} else if t, err := a.cfg.Resolve(""); err == nil {
 		target = t.Name
 	}
-	return &mcpserver.Server{Engine: eng, Sessions: svc, Querier: pg.(*postgres.Adapter), Target: target, Human: humanIdentity(),
+	return &mcpserver.Server{Engine: eng, Sessions: svc, Querier: q, Target: target, Human: humanIdentity(),
 		Checkpoint: checkpoint, Branch: branch, SessionID: sessionID, Version: version}, nil
 }
 
 func mcpCmd() *cobra.Command {
-	var target, sessionID string
+	var target, sessionID, executorURL string
 	var checkpoint, branch bool
 	cmd := &cobra.Command{
 		Use:   "mcp ADAPTER",
@@ -55,16 +67,28 @@ Add to an MCP client, e.g. Claude Code's .mcp.json:
   {"mcpServers": {"changegate": {"command": "changegate", "args": ["mcp", "postgres", "--target", "app"]}}}`,
 		Args: cobra.ExactArgs(1),
 		RunE: func(_ *cobra.Command, args []string) error {
-			if args[0] != "postgres" {
-				return fmt.Errorf("adapter %q has no MCP server yet (available: postgres)", args[0])
+			if args[0] != "postgres" && args[0] != "mysql" {
+				return fmt.Errorf("adapter %q has no MCP server yet (available: postgres, mysql)", args[0])
 			}
 			a, err := newApp()
 			if err != nil {
 				return err
 			}
 			defer a.close()
-			s, err := a.mcpServer(target, checkpoint, branch, sessionID)
-			if err != nil {
+			if executorURL == "" {
+				executorURL = os.Getenv("CHANGEGATE_EXECUTOR_URL")
+			}
+			var s *mcpserver.Server
+			if executorURL != "" {
+				tok := os.Getenv("CHANGEGATE_EXECUTOR_TOKEN")
+				if tok == "" {
+					return errors.New("set CHANGEGATE_EXECUTOR_TOKEN to use a shared executor")
+				}
+				if target == "" {
+					return errors.New("--target names the executor's target")
+				}
+				s = &mcpserver.Server{Backend: executor.NewClient(executorURL, tok), Target: target, Checkpoint: checkpoint, Branch: branch, SessionID: sessionID, Version: version}
+			} else if s, err = a.mcpServerFor(args[0], target, checkpoint, branch, sessionID); err != nil {
 				return err
 			}
 			if s.Target == "" {
@@ -77,6 +101,7 @@ Add to an MCP client, e.g. Claude Code's .mcp.json:
 	}
 	cmd.Flags().StringVarP(&target, "target", "t", "", "target (default: the default target)")
 	cmd.Flags().StringVar(&sessionID, "session", "", "attach to an existing session instead of starting one")
+	cmd.Flags().StringVar(&executorURL, "executor", "", "use a shared executor at this URL ($CHANGEGATE_EXECUTOR_URL); token from $CHANGEGATE_EXECUTOR_TOKEN")
 	cmd.Flags().BoolVar(&checkpoint, "checkpoint", false, "checkpoint the target when the session starts")
 	cmd.Flags().BoolVar(&branch, "branch", false, "work on a private branch of the target")
 	return cmd
@@ -138,10 +163,9 @@ type claudeHookInput struct {
 
 func hookCmd() *cobra.Command {
 	cmd := &cobra.Command{Use: "hook", Short: "Coding-agent hooks (called by the agent, not by people)"}
-	claude := &cobra.Command{
-		Use:   "claude-code",
-		Short: "Claude Code PreToolUse hook: route direct database changes through Changegate",
-		RunE: func(*cobra.Command, []string) error {
+	// Claude Code and Codex share the PreToolUse wire format.
+	preToolUse := func(agent string) func(*cobra.Command, []string) error {
+		return func(*cobra.Command, []string) error {
 			b, err := io.ReadAll(os.Stdin)
 			if err != nil {
 				return err
@@ -160,7 +184,7 @@ func hookCmd() *cobra.Command {
 			if in.Cwd != "" {
 				_ = os.Chdir(in.Cwd)
 			}
-			d := evaluateHook(ti.Command, "claude-code", in.SessionID)
+			d := evaluateHook(ti.Command, agent, in.SessionID)
 			if d.Permission == "allow" {
 				return nil
 			}
@@ -168,8 +192,10 @@ func hookCmd() *cobra.Command {
 				"hookEventName": "PreToolUse", "permissionDecision": d.Permission,
 				"permissionDecisionReason": "Changegate: " + d.Reason,
 			}})
-		},
+		}
 	}
+	claude := &cobra.Command{Use: "claude-code", Short: "Claude Code PreToolUse hook: route direct database changes through Changegate", RunE: preToolUse("claude-code")}
+	codex := &cobra.Command{Use: "codex", Short: "Codex PreToolUse hook (same wire format as Claude Code)", RunE: preToolUse("codex")}
 	generic := &cobra.Command{
 		Use:   "check COMMAND",
 		Short: "Evaluate a shell command for any agent; exit 2 means blocked",
@@ -187,7 +213,62 @@ func hookCmd() *cobra.Command {
 			return nil
 		},
 	}
-	cmd.AddCommand(claude, generic)
+	cursor := &cobra.Command{
+		Use:   "cursor",
+		Short: "Cursor beforeShellExecution hook",
+		RunE: func(*cobra.Command, []string) error {
+			b, _ := io.ReadAll(os.Stdin)
+			var in struct {
+				Command string `json:"command"`
+				Cwd     string `json:"cwd"`
+			}
+			if json.Unmarshal(b, &in) != nil {
+				return printJSON(map[string]string{"permission": "allow"})
+			}
+			if in.Cwd != "" {
+				_ = os.Chdir(in.Cwd)
+			}
+			d := evaluateHook(in.Command, "cursor", "")
+			out := map[string]string{"permission": d.Permission}
+			if d.Permission != "allow" {
+				out["userMessage"] = "Changegate: " + d.Reason
+				out["agentMessage"] = "Changegate: " + d.Reason
+			}
+			return printJSON(out)
+		},
+	}
+	gemini := &cobra.Command{
+		Use:   "gemini",
+		Short: "Gemini CLI BeforeTool hook (shell commands); prints {decision: deny}",
+		RunE: func(*cobra.Command, []string) error {
+			b, _ := io.ReadAll(os.Stdin)
+			var in struct {
+				ToolName  string          `json:"tool_name"`
+				ToolInput json.RawMessage `json:"tool_input"`
+				Cwd       string          `json:"cwd"`
+			}
+			if err := json.Unmarshal(b, &in); err != nil {
+				return nil //nolint:nilerr // never break the agent on malformed hook input
+			}
+			var ti struct {
+				Command string `json:"command"`
+			}
+			_ = json.Unmarshal(in.ToolInput, &ti)
+			if ti.Command == "" {
+				return nil
+			}
+			if in.Cwd != "" {
+				_ = os.Chdir(in.Cwd)
+			}
+			d := evaluateHook(ti.Command, "gemini-cli", "")
+			if d.Permission == "allow" {
+				return nil
+			}
+			// Exit 0 with a JSON decision (Gemini reports exit 2 as a failed hook).
+			return printJSON(map[string]string{"decision": map[string]string{"deny": "deny", "ask": "ask"}[d.Permission], "reason": "Changegate: " + d.Reason})
+		},
+	}
+	cmd.AddCommand(claude, codex, generic, cursor, gemini)
 	return cmd
 }
 
@@ -225,7 +306,7 @@ func installCmd() *cobra.Command {
 	var target string
 	cmd := &cobra.Command{
 		Use:   "install AGENT",
-		Short: "Install Changegate into a coding agent (claude-code, cursor, codex)",
+		Short: "Install Changegate into a coding agent (claude-code, codex, cursor, gemini, opencode, agents-md)",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(_ *cobra.Command, args []string) error {
 			a, err := newApp()
@@ -244,7 +325,11 @@ func installCmd() *cobra.Command {
 			if p, err := os.Executable(); err == nil {
 				exe = p
 			}
-			serverArgs := []string{"mcp", "postgres", "--target", target}
+			adapterName := "postgres"
+			if t, err := a.cfg.Resolve(target); err == nil && t.Adapter == "mysql" {
+				adapterName = "mysql"
+			}
+			serverArgs := []string{"mcp", adapterName, "--target", target}
 			switch args[0] {
 			case "claude-code":
 				mcpPath := filepath.Join(a.cfg.Dir, ".mcp.json")
@@ -281,11 +366,98 @@ func installCmd() *cobra.Command {
 				}); err != nil {
 					return err
 				}
+				hp := filepath.Join(a.cfg.Dir, ".cursor", "hooks.json")
+				if err := mergeJSON(hp, func(m map[string]any) {
+					m["version"] = 1
+					h := sub(m, "hooks")
+					var kept []any
+					if list, ok := h["beforeShellExecution"].([]any); ok {
+						for _, e := range list {
+							if em, ok := e.(map[string]any); !ok || filepath.Base(firstWord(fmt.Sprint(em["command"]))) != "changegate" {
+								kept = append(kept, e)
+							}
+						}
+					}
+					h["beforeShellExecution"] = append(kept, map[string]any{"command": exe + " hook cursor"})
+				}); err != nil {
+					return err
+				}
+				fmt.Println("wrote", p, "and", hp)
+			case "gemini":
+				p := filepath.Join(a.cfg.Dir, ".gemini", "settings.json")
+				if err := mergeJSON(p, func(m map[string]any) {
+					sub(m, "mcpServers")["changegate"] = map[string]any{"command": exe, "args": serverArgs, "env": map[string]any{"CHANGEGATE_AGENT": "gemini-cli"}}
+					h := sub(m, "hooks")
+					var kept []any
+					if list, ok := h["BeforeTool"].([]any); ok {
+						for _, e := range list {
+							if !isChangegateHook(e) {
+								kept = append(kept, e)
+							}
+						}
+					}
+					h["BeforeTool"] = append(kept, map[string]any{"matcher": "run_shell_command", "hooks": []any{map[string]any{"type": "command", "command": exe + " hook gemini"}}})
+				}); err != nil {
+					return err
+				}
 				fmt.Println("wrote", p)
+			case "agents-md":
+				p := filepath.Join(a.cfg.Dir, "AGENTS.md")
+				b, _ := os.ReadFile(p)
+				if strings.Contains(string(b), "<!-- changegate -->") {
+					fmt.Println(p, "already has the Changegate section")
+					return nil
+				}
+				section := "\n<!-- changegate -->\n## Database and infrastructure changes\n\n" +
+					"This project guards `" + target + "` with Changegate. Never change it with raw `psql`, `kubectl` or `terraform`.\n" +
+					"Use the `changegate` MCP tools: `query` to read, `propose_change` to preview a change (it shows exact rows,\n" +
+					"locks and reversibility without changing anything), then `apply_change`. Every change can be undone with\n" +
+					"`undo_change`. If a change needs approval, tell the user and wait; do not look for another way. From a shell,\n" +
+					"use `changegate exec --intent \"<what the user asked>\" \"<SQL>\"`. Never run `changegate approve`.\n"
+				f, err := os.OpenFile(p, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0o644)
+				if err != nil {
+					return err
+				}
+				_, err = f.WriteString(section)
+				if cerr := f.Close(); err == nil {
+					err = cerr
+				}
+				if err != nil {
+					return err
+				}
+				fmt.Println("added the Changegate section to", p)
+			case "opencode":
+				p := filepath.Join(a.cfg.Dir, "opencode.json")
+				if err := mergeJSON(p, func(m map[string]any) {
+					if _, ok := m["$schema"]; !ok {
+						m["$schema"] = "https://opencode.ai/config.json"
+					}
+					sub(m, "mcp")["changegate"] = map[string]any{"type": "local", "command": append([]string{exe}, serverArgs...),
+						"environment": map[string]any{"CHANGEGATE_AGENT": "opencode"}, "enabled": true}
+				}); err != nil {
+					return err
+				}
+				pp := filepath.Join(a.cfg.Dir, ".opencode", "plugins", "changegate.ts")
+				if err := os.MkdirAll(filepath.Dir(pp), 0o755); err != nil {
+					return err
+				}
+				src := strings.Replace(opencodePlugin, "__CHANGEGATE_BIN__", strings.ReplaceAll(exe, `"`, `\"`), 1)
+				if err := os.WriteFile(pp, []byte(src), 0o644); err != nil {
+					return err
+				}
+				fmt.Println("wrote", p, "(MCP server \"changegate\") and", pp, "(blocks direct shell changes)")
 			case "codex":
-				fmt.Printf("add to ~/.codex/config.toml:\n\n[mcp_servers.changegate]\ncommand = %q\nargs = %s\nenv = { CHANGEGATE_AGENT = \"codex\" }\n", exe, tomlList(serverArgs))
+				p := filepath.Join(a.cfg.Dir, ".codex", "config.toml")
+				block := fmt.Sprintf("%s\n[mcp_servers.changegate]\ncommand = %q\nargs = %s\nenv = { CHANGEGATE_AGENT = \"codex\" }\n\n"+
+					"[[hooks.PreToolUse]]\nmatcher = \"^Bash$\"\n\n[[hooks.PreToolUse.hooks]]\ntype = \"command\"\ncommand = %q\ntimeout = 30\n%s\n",
+					codexBegin, exe, tomlList(serverArgs), exe+" hook codex", codexEnd)
+				if err := writeMarkedBlock(p, block); err != nil {
+					return err
+				}
+				fmt.Println("wrote", p, "(MCP server \"changegate\" and a PreToolUse hook)")
+				fmt.Println("Codex loads project config only for trusted projects; open Codex here, trust the project and approve the hook in /hooks")
 			default:
-				return fmt.Errorf("unknown agent %q (claude-code, cursor, codex)", args[0])
+				return fmt.Errorf("unknown agent %q (claude-code, codex, cursor, gemini, opencode, agents-md)", args[0])
 			}
 			return nil
 		},
@@ -317,6 +489,43 @@ func firstWord(s string) string {
 		}
 	}
 	return s
+}
+
+//go:embed opencode_plugin.ts
+var opencodePlugin string
+
+const (
+	codexBegin = "# >>> changegate (managed by `changegate install codex`)"
+	codexEnd   = "# <<< changegate"
+)
+
+// writeMarkedBlock replaces the block between codexBegin and codexEnd in p,
+// or appends it, keeping the rest of the file.
+func writeMarkedBlock(p, block string) error {
+	b, err := os.ReadFile(p)
+	if err != nil && !errors.Is(err, fs.ErrNotExist) {
+		return err
+	}
+	s := string(b)
+	if i := strings.Index(s, codexBegin); i >= 0 {
+		end := len(s)
+		if j := strings.Index(s[i:], codexEnd); j >= 0 {
+			end = i + j + len(codexEnd)
+			if end < len(s) && s[end] == '\n' {
+				end++
+			}
+		}
+		s = s[:i] + block + s[end:]
+	} else {
+		if s != "" && !strings.HasSuffix(s, "\n\n") {
+			s += "\n"
+		}
+		s += block
+	}
+	if err := os.MkdirAll(filepath.Dir(p), 0o755); err != nil {
+		return err
+	}
+	return os.WriteFile(p, []byte(s), 0o644)
 }
 
 func tomlList(xs []string) string {

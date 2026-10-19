@@ -1,0 +1,18 @@
+[build-system]
+requires = ["hatchling>=1.25"]
+build-backend = "hatchling.build"
+
+[project]
+name = "changegate-sdk"
+version = "0.1.0"
+description = "Changegate SDK: route your agent's changes through plan, policy, approval and undo."
+readme = "README.md"
+license = "Apache-2.0"
+requires-python = ">=3.9"
+dependencies = []
+
+[project.optional-dependencies]
+langgraph = ["langgraph>=0.2"]
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/changegate_sdk"]

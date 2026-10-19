@@ -7,8 +7,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/srawlin/changegate/pkg/adapter"
 	"github.com/jackc/pgx/v5"
+	"github.com/srawlin/changegate/pkg/adapter"
 )
 
 func newA(t *testing.T) *Adapter {

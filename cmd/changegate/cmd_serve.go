@@ -12,9 +12,9 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/spf13/cobra"
 	"github.com/srawlin/changegate/internal/approval"
 	"github.com/srawlin/changegate/internal/engine"
-	"github.com/spf13/cobra"
 )
 
 // notifier returns the configured out-of-band approval notifier, if any.

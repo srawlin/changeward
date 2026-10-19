@@ -1,0 +1,25 @@
+# Compensation manifest: GitHub issues and labels (REST v3).
+# Target config: base_url: https://api.github.com, header.Authorization: "Bearer ${GITHUB_TOKEN}"
+api: github
+operations:
+  - match: {method: POST, path: "/repos/{owner}/{repo}/issues"}
+    description: GitHub issues cannot be deleted; undo closes the issue as not planned
+    inverse: {method: PATCH, path: "/repos/{owner}/{repo}/issues/{response.number}", body: {state: closed, state_reason: not_planned}}
+    reversibility: compensatable
+  - match: {method: PATCH, path: "/repos/{owner}/{repo}/issues/{number}"}
+    before: {method: GET, path: "/repos/{owner}/{repo}/issues/{number}"}
+    inverse:
+      method: PATCH
+      path: "/repos/{owner}/{repo}/issues/{number}"
+      body: {title: "{before.title}", body: "{before.body}", state: "{before.state}"}
+    reversibility: compensatable
+  - match: {method: POST, path: "/repos/{owner}/{repo}/labels"}
+    inverse: {method: DELETE, path: "/repos/{owner}/{repo}/labels/{response.name}"}
+  - match: {method: DELETE, path: "/repos/{owner}/{repo}/labels/{name}"}
+    before: {method: GET, path: "/repos/{owner}/{repo}/labels/{name}"}
+    inverse: {method: POST, path: "/repos/{owner}/{repo}/labels", body: {name: "{before.name}", color: "{before.color}", description: "{before.description}"}}
+  - match: {method: POST, path: "/repos/{owner}/{repo}/issues/{number}/comments"}
+    inverse: {method: DELETE, path: "/repos/{owner}/{repo}/issues/comments/{response.id}"}
+  - match: {method: PUT, path: "/repos/{owner}/{repo}/pulls/{number}/merge"}
+    description: merging cannot be undone (revert with a new PR)
+    reversibility: irreversible

@@ -5,6 +5,7 @@ package config
 import (
 	"errors"
 	"fmt"
+	"io/fs"
 	"os"
 	"path/filepath"
 	"sort"
@@ -64,6 +65,27 @@ type Signals struct {
 	Jev *Jev `yaml:"jev,omitempty"`
 }
 
+// Telemetry configures export of change lifecycles to your OpenTelemetry
+// collector (OTLP/HTTP). Off unless an endpoint is set here or in
+// $OTEL_EXPORTER_OTLP_ENDPOINT.
+type Telemetry struct {
+	OTLPEndpoint string            `yaml:"otlp_endpoint,omitempty"`
+	Headers      map[string]string `yaml:"headers,omitempty"` // values support ${VAR}
+}
+
+// ExecutorToken is an API token accepted by `changegate executor serve`
+// (only the SHA-256 is stored; create entries with `changegate executor token`).
+type ExecutorToken struct {
+	Name   string   `yaml:"name"`
+	SHA256 string   `yaml:"sha256"`
+	Roles  []string `yaml:"roles"`
+}
+
+// Executor configures the shared executor.
+type Executor struct {
+	Tokens []ExecutorToken `yaml:"tokens,omitempty"`
+}
+
 // Plugin is an out-of-process adapter.
 type Plugin struct {
 	Path string   `yaml:"path"`
@@ -79,6 +101,8 @@ type Config struct {
 	Approvals Approvals         `yaml:"approvals,omitempty"`
 	Adapters  map[string]Plugin `yaml:"adapters,omitempty"`
 	Signals   Signals           `yaml:"signals,omitempty"`
+	Telemetry Telemetry         `yaml:"telemetry,omitempty"`
+	Executor  Executor          `yaml:"executor,omitempty"`
 	// DefaultTarget is used when a command does not name one.
 	DefaultTarget string `yaml:"default_target,omitempty"`
 
@@ -92,7 +116,13 @@ type Config struct {
 // in the working directory or a parent. A missing file yields an empty config.
 func Load() (*Config, error) {
 	if p := os.Getenv("CHANGEGATE_CONFIG"); p != "" {
-		return LoadFile(p)
+		c, err := LoadFile(p)
+		if errors.Is(err, fs.ErrNotExist) {
+			// Not created yet (e.g. before the first connect): Save writes it here.
+			abs, _ := filepath.Abs(p)
+			return &Config{Targets: map[string]Target{}, Path: abs, Dir: filepath.Dir(abs)}, nil
+		}
+		return c, err
 	}
 	wd, err := os.Getwd()
 	if err != nil {

@@ -15,6 +15,12 @@ func TestEvaluate(t *testing.T) {
 		{`PGPASSWORD=x psql -c "DROP TABLE orders"`, "deny"},
 		{`psql -d otherdb -c "DROP TABLE orders"`, "allow"},
 		{`psql -d appdb -f migrate.sql`, "deny"},
+		{`psql -d appdb -c '\d customers' -c "SELECT * FROM customers WHERE id = 20;"`, "allow"},
+		{`psql -d appdb -c '\dt+'`, "allow"},
+		{`psql -d appdb -c '\i drop.sql'`, "deny"},
+		{`psql -d appdb -c '\! rm -rf /tmp/x'`, "deny"},
+		{`psql -d appdb -c '\copy t FROM data.csv'`, "deny"},
+		{`psql -d appdb -c '\d t \\ DELETE FROM t'`, "deny"},
 		{`cat x.sql | psql -d appdb`, "deny"},
 		{`psql -d appdb`, "ask"},
 		{`echo hi && psql -d appdb -c "TRUNCATE t"`, "deny"},
@@ -32,6 +38,12 @@ func TestEvaluate(t *testing.T) {
 	for _, c := range cases {
 		if got := Evaluate(c.cmd, targets); got.Permission != c.want {
 			t.Errorf("%s: %s (%s), want %s", c.cmd, got.Permission, got.Reason, c.want)
+		}
+	}
+	withK8s := append(targets, Target{Name: "dev-cluster", Adapter: "kubernetes"}, Target{Name: "infra", Adapter: "terraform"})
+	for cmd, want := range map[string]string{"kubectl delete pod x": "deny", "kubectl get pods": "allow", "terraform apply": "deny", "terraform state rm x": "ask"} {
+		if got := Evaluate(cmd, withK8s); got.Permission != want {
+			t.Errorf("%s with targets: %s, want %s", cmd, got.Permission, want)
 		}
 	}
 	if got := Evaluate(`psql -c "DELETE FROM t"`, nil); got.Permission != "allow" {

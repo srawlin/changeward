@@ -193,7 +193,7 @@ type Changeset struct {
 	Name      string    `json:"name,omitempty"`
 	Changes   []string  `json:"changes"` // change IDs in apply order
 	State     State     `json:"state"`
-	Decision  *Decision `json:"decision,omitempty"` // strictest of the members
+	Decision  *Decision `json:"decision,omitempty"`  // strictest of the members
 	FailedAt  int       `json:"failed_at,omitempty"` // 1-based step that failed
 	Error     string    `json:"error,omitempty"`
 	CreatedAt string    `json:"created_at"`

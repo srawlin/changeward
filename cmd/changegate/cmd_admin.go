@@ -8,13 +8,13 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/spf13/cobra"
 	"github.com/srawlin/changegate/adapters/postgres"
 	"github.com/srawlin/changegate/adapters/toykv"
 	"github.com/srawlin/changegate/conformance"
 	"github.com/srawlin/changegate/internal/policy"
 	"github.com/srawlin/changegate/internal/store"
 	"github.com/srawlin/changegate/pkg/adapter"
-	"github.com/spf13/cobra"
 )
 
 func auditCmd() *cobra.Command {

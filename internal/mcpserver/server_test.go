@@ -9,14 +9,14 @@ import (
 	"testing"
 	"time"
 
+	"github.com/jackc/pgx/v5"
+	"github.com/modelcontextprotocol/go-sdk/mcp"
 	"github.com/srawlin/changegate/adapters/postgres"
 	"github.com/srawlin/changegate/internal/engine"
 	"github.com/srawlin/changegate/internal/policy"
 	"github.com/srawlin/changegate/internal/session"
 	"github.com/srawlin/changegate/internal/store"
 	"github.com/srawlin/changegate/pkg/adapter"
-	"github.com/jackc/pgx/v5"
-	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
 
 func testDB(t *testing.T) string {

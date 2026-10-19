@@ -12,23 +12,24 @@ import (
 	"strings"
 	"sync"
 
+	"github.com/modelcontextprotocol/go-sdk/mcp"
 	"github.com/srawlin/changegate/adapters/postgres"
+	"github.com/srawlin/changegate/internal/backend"
 	"github.com/srawlin/changegate/internal/engine"
 	"github.com/srawlin/changegate/internal/model"
 	"github.com/srawlin/changegate/internal/policy"
 	"github.com/srawlin/changegate/internal/session"
-	"github.com/srawlin/changegate/internal/store"
 	"github.com/srawlin/changegate/pkg/adapter"
-	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
 
-// Querier runs read-only queries (implemented by the Postgres adapter).
-type Querier interface {
-	Query(ctx context.Context, t adapter.Target, sql string, maxRows int) (*postgres.QueryResult, error)
-}
+// Querier runs read-only queries (implemented by the SQL adapters).
+type Querier = adapter.Querier
 
 // Server is the Changegate MCP server for one target.
 type Server struct {
+	// Backend, if set, is where changes are made (e.g. a shared executor).
+	// Otherwise a local backend is built from Engine and Sessions.
+	Backend  backend.Backend
 	Engine   *engine.Engine
 	Sessions *session.Service
 	Querier  Querier
@@ -45,6 +46,19 @@ type Server struct {
 	mu      sync.Mutex
 	session *model.Session
 	agent   string
+	local   backend.Backend
+}
+
+func (s *Server) be() backend.Backend {
+	if s.Backend != nil {
+		return s.Backend
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.local == nil {
+		s.local = &backend.Local{Engine: s.Engine, Sessions: s.Sessions, Human: s.Human}
+	}
+	return s.local
 }
 
 // Run serves MCP over stdio until the client disconnects.
@@ -116,29 +130,25 @@ func (s *Server) principal(req *mcp.CallToolRequest) model.Principal {
 // ensureSession starts (or reuses) the session lazily, so the agent identity
 // from the MCP handshake is known.
 func (s *Server) ensureSession(ctx context.Context, req *mcp.CallToolRequest) (*model.Session, error) {
-	p := s.principal(req)
+	agent := s.agentName(req)
+	be := s.be()
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	if s.session != nil {
 		return s.session, nil
 	}
 	if s.SessionID != "" {
-		sess, err := s.Sessions.Get(ctx, s.SessionID)
+		sess, err := be.GetSession(ctx, s.SessionID)
 		if err != nil {
 			return nil, err
 		}
 		s.session = sess
 		return sess, nil
 	}
-	sess, err := s.Sessions.Start(ctx, session.StartOptions{Target: s.Target, Principal: p, Checkpoint: s.Checkpoint,
+	sess, err := be.StartSession(ctx, backend.StartRequest{Target: s.Target, Agent: agent, Checkpoint: s.Checkpoint, Branch: s.Branch,
 		Meta: map[string]string{"via": "mcp"}})
-	if err != nil && sess == nil {
+	if err != nil {
 		return nil, err
-	}
-	if s.Branch {
-		if sess, err = s.Sessions.CreateBranch(ctx, sess.ID, ""); err != nil {
-			return nil, err
-		}
 	}
 	s.session = sess
 	return sess, nil
@@ -149,21 +159,8 @@ func (s *Server) endSession(ctx context.Context) {
 	sess := s.session
 	s.mu.Unlock()
 	if sess != nil && s.SessionID == "" {
-		_, _ = s.Sessions.End(ctx, sess.ID)
+		_ = s.be().EndSession(ctx, sess.ID)
 	}
-}
-
-func (s *Server) target(ctx context.Context, req *mcp.CallToolRequest) (adapter.Target, *model.Session, error) {
-	sess, err := s.ensureSession(ctx, req)
-	if err != nil {
-		return adapter.Target{}, nil, err
-	}
-	sess, err = s.Sessions.Store.GetSession(ctx, sess.ID)
-	if err != nil {
-		return adapter.Target{}, nil, err
-	}
-	t, err := s.Sessions.TargetFor(ctx, sess)
-	return t, sess, err
 }
 
 func text(format string, args ...any) *mcp.CallToolResult {
@@ -182,8 +179,8 @@ type QueryIn struct {
 	MaxRows int    `json:"max_rows,omitempty" jsonschema:"maximum rows to return (default 100, max 1000)"`
 }
 
-func (s *Server) query(ctx context.Context, req *mcp.CallToolRequest, in QueryIn) (*mcp.CallToolResult, *postgres.QueryResult, error) {
-	t, _, err := s.target(ctx, req)
+func (s *Server) query(ctx context.Context, req *mcp.CallToolRequest, in QueryIn) (*mcp.CallToolResult, *adapter.QueryResult, error) {
+	sess, err := s.ensureSession(ctx, req)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -193,7 +190,7 @@ func (s *Server) query(ctx context.Context, req *mcp.CallToolRequest, in QueryIn
 	if in.MaxRows > 1000 {
 		in.MaxRows = 1000
 	}
-	res, err := s.Querier.Query(ctx, t, in.SQL, in.MaxRows)
+	res, err := s.be().Query(ctx, sess.ID, in.SQL, in.MaxRows)
 	if err != nil {
 		r := text("error: %v", err)
 		r.IsError = true
@@ -202,7 +199,7 @@ func (s *Server) query(ctx context.Context, req *mcp.CallToolRequest, in QueryIn
 	return text("%s", formatTable(res)), res, nil
 }
 
-func formatTable(r *postgres.QueryResult) string {
+func formatTable(r *adapter.QueryResult) string {
 	var b strings.Builder
 	b.WriteString(strings.Join(r.Columns, " | "))
 	b.WriteString("\n")
@@ -224,7 +221,17 @@ func formatTable(r *postgres.QueryResult) string {
 // Empty is an empty input.
 type Empty struct{}
 
-func (s *Server) listTables(ctx context.Context, req *mcp.CallToolRequest, _ Empty) (*mcp.CallToolResult, *postgres.QueryResult, error) {
+func (s *Server) listTables(ctx context.Context, req *mcp.CallToolRequest, _ Empty) (*mcp.CallToolResult, *adapter.QueryResult, error) {
+	sess, err := s.ensureSession(ctx, req)
+	if err != nil {
+		return nil, nil, err
+	}
+	if name, _ := s.be().TargetAdapter(ctx, sess.ID); name == "mysql" {
+		return s.query(ctx, req, QueryIn{MaxRows: 1000, SQL: `SELECT CONCAT(t.TABLE_SCHEMA, '.', t.TABLE_NAME) AS table_name, t.TABLE_ROWS AS approx_rows,
+			GROUP_CONCAT(CONCAT(c.COLUMN_NAME, ' ', c.COLUMN_TYPE) ORDER BY c.ORDINAL_POSITION SEPARATOR ', ') AS columns
+			FROM information_schema.TABLES t JOIN information_schema.COLUMNS c ON c.TABLE_SCHEMA = t.TABLE_SCHEMA AND c.TABLE_NAME = t.TABLE_NAME
+			WHERE t.TABLE_SCHEMA = DATABASE() AND c.COLUMN_NAME NOT LIKE '\_cg\_%' GROUP BY t.TABLE_SCHEMA, t.TABLE_NAME, t.TABLE_ROWS ORDER BY 1`})
+	}
 	return s.query(ctx, req, QueryIn{MaxRows: 1000, SQL: `SELECT n.nspname || '.' || c.relname AS table_name,
 		  greatest(c.reltuples, 0)::bigint AS approx_rows,
 		  string_agg(a.attname || ' ' || format_type(a.atttypid, a.atttypmod), ', ' ORDER BY a.attnum) AS columns
@@ -281,14 +288,14 @@ func out(c *model.Change) ChangeOut {
 }
 
 func (s *Server) propose(ctx context.Context, req *mcp.CallToolRequest, in ProposeIn) (*mcp.CallToolResult, ChangeOut, error) {
-	t, sess, err := s.target(ctx, req)
+	sess, err := s.ensureSession(ctx, req)
 	if err != nil {
 		return toolError(err)
 	}
-	c, err := s.Engine.Propose(ctx, engine.ProposeRequest{Target: t, Operation: adapter.Operation{Kind: "sql", Payload: in.SQL, Intent: in.Intent},
-		Principal: s.principal(req), SessionID: sess.ID, Provenance: model.Provenance{Host: "mcp:" + strings.TrimPrefix(s.agentName(req), "agent:")}})
+	c, err := s.be().Propose(ctx, backend.ProposeRequest{SessionID: sess.ID, Payload: in.SQL, Intent: in.Intent,
+		Host: "mcp:" + strings.TrimPrefix(s.agentName(req), "agent:")})
 	if err != nil {
-		if errors.Is(err, postgres.ErrReadOnly) {
+		if errors.Is(err, postgres.ErrReadOnly) || strings.Contains(err.Error(), "read-only; use query") {
 			return toolError(errors.New("that SQL only reads; use the query tool"))
 		}
 		return toolError(err)
@@ -374,7 +381,7 @@ type RefIn struct {
 }
 
 func (s *Server) status(ctx context.Context, _ *mcp.CallToolRequest, in RefIn) (*mcp.CallToolResult, ChangeOut, error) {
-	c, err := s.Engine.Get(ctx, in.PlanID)
+	c, err := s.be().Get(ctx, in.PlanID)
 	if err != nil {
 		return toolError(err)
 	}
@@ -383,7 +390,7 @@ func (s *Server) status(ctx context.Context, _ *mcp.CallToolRequest, in RefIn) (
 }
 
 func (s *Server) apply(ctx context.Context, req *mcp.CallToolRequest, in RefIn) (*mcp.CallToolResult, ChangeOut, error) {
-	c, err := s.Engine.Get(ctx, in.PlanID)
+	c, err := s.be().Get(ctx, in.PlanID)
 	if err != nil {
 		return toolError(err)
 	}
@@ -400,19 +407,17 @@ func (s *Server) apply(ctx context.Context, req *mcp.CallToolRequest, in RefIn) 
 			o := out(c)
 			return text("pending approval: this client cannot ask the user inline. Ask the user to run `changegate approve %s`, then call apply_change again.", c.Plan.ID), o, nil
 		}
-		if c, err = s.Engine.Approve(ctx, c.ID, engine.ApproveRequest{PlanHash: c.Plan.Hash, Approver: s.Human, Channel: "mcp-elicitation", Approved: approved,
-			Reason: "confirmed in the agent client"}); err != nil {
+		if c, err = s.be().ApproveInline(ctx, c.ID, c.Plan.Hash, approved, "mcp-elicitation"); err != nil {
 			return toolError(err)
 		}
 		if !approved {
 			return text("the user declined change %s; it was not applied", c.ID), out(c), nil
 		}
 	}
-	t, _, err := s.target(ctx, req)
-	if err != nil {
+	if _, err := s.ensureSession(ctx, req); err != nil {
 		return toolError(err)
 	}
-	c, err = s.Engine.Apply(ctx, c.ID, t, s.agentName(req))
+	c, err = s.be().Apply(ctx, c.ID)
 	if err != nil {
 		var ce *adapter.ConflictError
 		if errors.As(err, &ce) {
@@ -477,46 +482,39 @@ type UndoIn struct {
 }
 
 func (s *Server) undo(ctx context.Context, req *mcp.CallToolRequest, in UndoIn) (*mcp.CallToolResult, ChangeOut, error) {
-	_, sess, err := s.target(ctx, req)
+	sess, err := s.ensureSession(ctx, req)
 	if err != nil {
 		return toolError(err)
 	}
-	var c *model.Change
+	ref := in.Change
 	var n int
 	if _, scanErr := fmt.Sscan(in.Change, &n); scanErr == nil && n > 0 && !strings.HasPrefix(in.Change, "c_") {
-		cs, err := s.Sessions.Changes(ctx, sess.ID)
+		cs, err := s.be().Changes(ctx, sess.ID)
 		if err != nil {
 			return toolError(err)
 		}
 		if n > len(cs) {
 			return toolError(fmt.Errorf("this session has %d changes", len(cs)))
 		}
-		c = cs[n-1]
-	} else if c, err = s.Engine.Get(ctx, in.Change); err != nil {
-		return toolError(err)
+		ref = cs[n-1].ID
 	}
-	if !session.Applied(c) {
-		return toolError(fmt.Errorf("change %s is %s; nothing to undo", c.ID, c.State))
-	}
-	all, err := s.Engine.Store.ListChanges(ctx, store.ChangeFilter{Target: c.Target.Name})
-	if err != nil {
-		return toolError(err)
-	}
-	if deps := session.Dependents(all, c); len(deps) > 0 && !in.WithDependents {
+	res, err := s.be().Undo(ctx, ref, in.WithDependents)
+	if res != nil && len(res.Dependents) > 0 {
 		var ids []string
-		for _, d := range deps {
+		for _, d := range res.Dependents {
 			ids = append(ids, d.ID)
 		}
 		return toolError(fmt.Errorf("later changes touch the same objects and must be undone first: %s; call again with with_dependents=true",
 			strings.Join(ids, ", ")))
 	}
-	res := s.Sessions.UndoChain(ctx, c, in.WithDependents, s.agentName(req))
 	var done []string
-	for _, u := range res.Undone {
-		done = append(done, u.ID)
+	if res != nil {
+		for _, u := range res.Undone {
+			done = append(done, u.ID)
+		}
 	}
-	if res.Err != nil {
-		return toolError(fmt.Errorf("undid [%s]; then: %v", strings.Join(done, ", "), res.Err))
+	if err != nil {
+		return toolError(fmt.Errorf("undid [%s]; then: %v", strings.Join(done, ", "), err))
 	}
 	last := res.Undone[len(res.Undone)-1]
 	return text("undone: %s", strings.Join(done, ", ")), out(last), nil
@@ -529,11 +527,11 @@ type ListOut struct {
 }
 
 func (s *Server) list(ctx context.Context, req *mcp.CallToolRequest, _ Empty) (*mcp.CallToolResult, ListOut, error) {
-	_, sess, err := s.target(ctx, req)
+	sess, err := s.ensureSession(ctx, req)
 	if err != nil {
 		return nil, ListOut{}, err
 	}
-	cs, err := s.Sessions.Changes(ctx, sess.ID)
+	cs, err := s.be().Changes(ctx, sess.ID)
 	if err != nil {
 		return nil, ListOut{}, err
 	}
@@ -557,13 +555,13 @@ type CheckpointIn struct {
 }
 
 func (s *Server) checkpoint(ctx context.Context, req *mcp.CallToolRequest, in CheckpointIn) (*mcp.CallToolResult, ChangeOut, error) {
-	_, sess, err := s.target(ctx, req)
+	sess, err := s.ensureSession(ctx, req)
 	if err != nil {
 		return toolError(err)
 	}
-	cp, err := s.Sessions.Checkpoint(ctx, sess.ID, in.Label)
+	id, err := s.be().Checkpoint(ctx, sess.ID, in.Label)
 	if err != nil {
 		return toolError(err)
 	}
-	return text("checkpoint %s taken; the user can restore it with `changegate restore %s --yes`", cp.Ref.ID, cp.Ref.ID), ChangeOut{}, nil
+	return text("checkpoint %s taken; the user can restore it with `changegate restore %s --yes`", id, id), ChangeOut{}, nil
 }

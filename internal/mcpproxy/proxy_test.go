@@ -9,6 +9,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/jackc/pgx/v5"
+	"github.com/modelcontextprotocol/go-sdk/mcp"
 	"github.com/srawlin/changegate/adapters/postgres"
 	"github.com/srawlin/changegate/internal/engine"
 	"github.com/srawlin/changegate/internal/mcpserver"
@@ -17,8 +19,6 @@ import (
 	"github.com/srawlin/changegate/internal/session"
 	"github.com/srawlin/changegate/internal/store"
 	"github.com/srawlin/changegate/pkg/adapter"
-	"github.com/jackc/pgx/v5"
-	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
 
 // TestMain doubles as a fake upstream MCP server when CG_FAKE_UPSTREAM is set.

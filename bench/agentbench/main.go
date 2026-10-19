@@ -24,6 +24,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/jackc/pgx/v5"
 	"github.com/srawlin/changegate/adapters/postgres"
 	"github.com/srawlin/changegate/internal/engine"
 	"github.com/srawlin/changegate/internal/model"
@@ -31,7 +32,6 @@ import (
 	"github.com/srawlin/changegate/internal/signals"
 	"github.com/srawlin/changegate/internal/store"
 	"github.com/srawlin/changegate/pkg/adapter"
-	"github.com/jackc/pgx/v5"
 	"gopkg.in/yaml.v3"
 )
 

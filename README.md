@@ -1,156 +1,191 @@
 # Changegate
 
-**Change control for AI agents.** Every change an agent makes, whether as a pull request or as a live action
-against a real system, gets a verified effect plan, a reversibility class and a tested undo path. Approval is
-routed by risk and environment instead of by default.
-
-- **Lane B (direct):** agents act on live databases through Changegate's MCP server, MCP proxy or coding-agent
-  hooks. Each write is previewed with a dry run that is always rolled back (exact rows, before/after values,
-  locks, rewrites). It is decided by policy, applied by an executor that holds the credentials, logged on a session
-  timeline, and undoable in one command.
-- **Lane A (CI/CD):** migrations in a PR are rehearsed on a throwaway copy: forward, observe, roll back, then
-  compare catalog and data checksums. The effect report is posted on the PR, and policy gates the merge or deploy.
-- **Promotion** turns a direct-lane session into a migration and a PR, so Git stays the source of truth.
-
-Postgres ships first. Status of the roadmap's M0 and M1 milestones: [docs/m0-m1-status.md](docs/m0-m1-status.md).
-
-## Quick start: let an agent touch your database without fear
-
-```sh
-changegate connect app --dsn '${DATABASE_URL}' --env personal   # env class is bound to the connection
-changegate install claude-code                                  # MCP server + PreToolUse hook
-```
-
-Or add the MCP server to any client:
-
-```json
-{ "mcpServers": { "changegate": { "command": "npx", "args": ["-y", "@changegate/cli", "mcp", "postgres", "--target", "app"] } } }
-```
-
-The agent gets `query`, `list_tables`, `propose_change`, `apply_change`, `undo_change`, `get_change_status`,
-`list_session_changes` and `checkpoint`. From the terminal:
+**Let AI agents change real systems, safely.** Changegate sits between your agents and your databases,
+clusters and infrastructure. Every change an agent wants to make is previewed exactly, checked against your
+policy, applied by Changegate, and kept undoable. That covers coding agents in your terminal, agents in your
+product, and pull requests in CI.
 
 ```console
-$ changegate exec "UPDATE orders SET region = 'eu' WHERE id % 2 = 0"
-plan p_5b1450d3811b · app (personal) · reversible · 500 rows · live-dry-run
-#1 UPDATE public.orders — 500 rows
-   ~ id=2  region: null → "eu"
-   …
-change c_0a34ec5d5bdc — verified · 500 rows · UPDATE 500
+$ changegate exec "DELETE FROM orders WHERE total > 990"
+plan p_5b14 · app (personal) · reversible · 10 rows · live-dry-run
+#1 DELETE public.orders — 10 rows
+   - id=17 total=999.00 customer_id=4 …
+change c_0a34 — verified · 10 rows · DELETE 10
 
-$ changegate log
-SESSION s_179c629fc993  agent=claude-code  user=steve  env=personal  target=app
-  #1  10:02  ALTER TABLE orders ADD COLUMN region text                reversible  verified
-  #2  10:03  UPDATE orders SET region = 'eu' WHERE id % 2 = 0 (500)   reversible  verified
-  #3  10:05  DELETE FROM orders WHERE total > 990 (10 rows)           reversible  verified
-
-$ changegate undo 1 --yes        # dependency-aware: undoes #3 and #2 first
-$ changegate rewind --yes        # undo the whole session
-$ changegate promote --pr        # schema changes → migration files (up + generated down) → PR
+$ changegate undo 1 --yes
+undone c_0a34  DELETE FROM orders WHERE total > 990
 ```
 
-How undo stays safe:
+> *Changegate* is a working name. See [docs/renaming.md](docs/renaming.md).
 
-- **DML:** on Postgres 18+ statements are rewritten with `RETURNING OLD/NEW` for exact per-row images; older
-  versions pre-select target rows. Apply aborts if the rows changed since the plan. Undo touches a row only if it
-  still equals its after-image, and refuses with a conflict otherwise.
-- **DDL:** `DROP TABLE`, `DROP COLUMN` and `TRUNCATE` are soft-dropped into `_changegate_trash`. Additive DDL is
-  inverted from a catalog diff. Anything else is labelled `checkpoint-only` or `irreversible` and handled by policy.
-- **Statements with side effects outside the transaction** (`pg_terminate_backend`, `dblink`, `DO` blocks) are
-  never executed in a dry run.
+## Why Changegate
 
-Environment classes (`personal`, `shared-dev`, `staging`, `prod`, `prod-restricted`) set the defaults. In
-`personal`, reversible changes are auto-approved. In `prod`, direct writes need an incident reference and
-out-of-band approval (Slack via `changegate serve`, or `changegate approve` by someone other than the proposer).
-Agents can never approve their own changes.
+Agents are good at writing changes, but nobody can see the effects until after they run. A `DELETE` without a
+`WHERE`, a migration that rewrites a 50 GB table, a `kubectl apply` over a hand-fixed production object, a
+`terraform apply` that replaces a database: all of these look fine in a chat window.
 
-## Quick start: rehearse migrations in pull requests
+| Without Changegate | With Changegate |
+| --- | --- |
+| The agent runs `psql`, `kubectl` or `terraform` directly with your credentials. | The agent calls `propose_change`. Changegate holds the credentials and applies only what was approved. |
+| You see what happened afterwards, if you look. | You see the **exact effect first**: rows and before/after values, locks, table rewrites, objects created, changed or destroyed. |
+| "Undo" means restoring a backup. | Every change gets a **tested undo path**: row images, soft-dropped tables, previous manifests, the last-applied Terraform config. The undo refuses if someone changed the data since. |
+| Approval is all or nothing: the agent asks for every command, or for none. | **Policy routes by risk and environment.** Reversible changes in dev are auto-approved. Production writes need an incident reference and a second person. The agent can never approve its own change. |
+| Migrations in PRs are reviewed by reading SQL. | Migrations are **rehearsed on a throwaway copy**: forward, observe, roll back, compare. The PR gets an effect report and a merge gate. |
+| The audit trail is scattered shell history. | Every session, plan, decision, approval and undo is in a **hash-chained audit log**, and can be exported to OpenTelemetry. |
 
-```yaml
-- uses: actions/checkout@v4
-  with: { fetch-depth: 0 }
-- uses: changegate/rehearse@v0
-  with: { mode: report, synthetic-rows: 1000 }
+## How it works
+
+```
+ agent ──▶ propose_change ──▶ plan (dry run, always rolled back) ──▶ policy ──▶ approve? ──▶ apply ──▶ verify
+                                    │                                   │                       │
+                                    ▼                                   ▼                       ▼
+                         exact effects + undo path         auto / you / a 2nd person       undo any time
 ```
 
-Or locally:
+Two lanes share one engine and one policy:
+
+- **Direct lane:** agents act on live systems through Changegate's MCP server, coding-agent hooks, SDKs or a
+  gateway. Each write becomes plan → decision → apply → verify, on a session timeline you can undo step by step.
+- **CI lane:** migrations, Kubernetes manifests and Terraform plans in a PR are rehearsed or dry-run. The report
+  is posted on the PR, and policy gates the merge or deploy.
+
+`changegate promote --pr` turns what an agent did directly in dev into migration files and a pull request, so
+Git stays the source of truth.
+
+**Supported systems:**
+
+| System | What you get |
+| --- | --- |
+| **Postgres** (16 to 18, Neon) | Exact dry runs and row-level undo. Soft-drop for `DROP`/`TRUNCATE`. Checkpoints: template DB, dump or Neon branch. |
+| **MySQL** 8 | The same guarantees for data changes; table-level checks for schema changes. |
+| **Kubernetes** | Server-side dry-run diffs and exact undo; Argo CD and Flux ownership flagged. |
+| **Terraform / OpenTofu** | Only the exact reviewed plan is applied. Destroying stateful resources is irreversible. |
+| **NGINX, Traefik, HAProxy** config | Validated before reload, health-checked after, rolled back on failure. |
+| **REST APIs** | Undo calls declared per operation in a YAML manifest (e.g. GitHub issues). |
+
+## Quick start (5 minutes)
+
+**1. Install** (pre-release, from source; needs Go 1.27+ and a C compiler):
 
 ```sh
-changegate rehearse --base-ref origin/main --dsn postgres://postgres@localhost/postgres --synthetic 1000 --out evidence.json
-changegate gate evidence.json          # exit 0 standard change, 2 review required, 3 denied
+git clone https://github.com/srawlin/changegate && cd changegate && make build   # → bin/changegate
+export PATH="$PWD/bin:$PATH"
 ```
 
-Detected frameworks: Flyway, Liquibase (formatted SQL), Atlas, Prisma, golang-migrate, goose and Sqitch run
-directly. Rails, Django and Alembic run through `--up-cmd` / `--down-cmd`. Tiers: T0 schema replay, T1 synthetic
-data (optionally scaled from production `reltuples`), and T2/T3 via `--from-database` (golden image or clone) or
-`--neon`. Reports never contain row values. GitLab: [`integrations/gitlab-component`](integrations/gitlab-component).
+Homebrew, `npx @changegate/cli` and `uvx changegate` packages come with the first release
+([details](docs/getting-started.md#install)).
 
-## Policy
+**2. Connect a database.** Its environment class decides the default policy:
 
-One CEL policy file covers both lanes (`changegate policy init` writes the built-in defaults as a starting point):
-
-```yaml
-rules:
-  - name: prod-destructive-needs-dba
-    when: change.env.startsWith("prod") && change.destructive
-    decide: require
-    approvers: ["group:dba", "group:sre"]
-    quorum: 2
-  - name: freeze
-    when: calendar.freeze("q4-release")
-    decide: deny
-  - name: agent-stricter-than-human
-    when: principal.kind == "agent" && change.reversibility in ["checkpoint-only", "irreversible"]
-    decide: require
-    approvers: ["owner:codeowners"]
+```sh
+changegate connect app --dsn 'postgres://localhost/myapp_dev' --env personal
 ```
 
-Rules combine as deny > require > approve. A rule that fails to evaluate counts as `require`, never as a silent
-pass.
+**3. Plug it into your coding agent:**
 
-Optional **Jev signals** (`signals: {jev: {enabled: true}}`, key in `$TYPESAFE_API_KEY`): before auto-approving a
-change, Changegate asks TypeSafe's Jev whether the effect goes beyond the agent's stated intent and whether the
-intent looks injected. Confident scores turn the approval into "confirm with a human". Signals can only tighten
-decisions, never approve.
+```sh
+changegate install claude-code     # or: codex, opencode, gemini, cursor, agents-md
+```
+
+This adds the Changegate MCP server: `query`, `list_tables`, `propose_change`, `apply_change`,
+`undo_change`, `get_change_status`, `list_session_changes` and `checkpoint`. It also adds a hook that blocks the
+agent's direct writes (`psql`, `kubectl apply`, `terraform apply`, …) and tells it to use those tools.
+
+**4. Ask your agent for a change,** e.g. "archive customers inactive for two years", then look at what happened:
+
+```sh
+changegate log                 # the session timeline: every change, its reversibility and state
+changegate undo 2 --yes        # undo step 2 (later steps that depend on it are undone first)
+changegate rewind --yes        # undo the whole session
+changegate ui                  # the same in a local web view
+```
+
+The [getting-started guide](docs/getting-started.md) walks through this with a sample database in Docker.
+
+## Integrations
+
+### Coding agents
+
+| Agent | Setup | What is installed | Guide |
+| --- | --- | --- | --- |
+| **Claude Code** | `changegate install claude-code` | `.mcp.json` and a PreToolUse hook in `.claude/settings.json` | [docs/agents/claude-code.md](docs/agents/claude-code.md) |
+| **OpenAI Codex CLI** | `changegate install codex` | `.codex/config.toml`: MCP server and PreToolUse hook | [docs/agents/codex.md](docs/agents/codex.md) |
+| **OpenCode** | `changegate install opencode` | `opencode.json` and the `.opencode/plugins/changegate.ts` plugin | [docs/agents/opencode.md](docs/agents/opencode.md) |
+| **Gemini CLI** | `changegate install gemini` | `.gemini/settings.json`: MCP server and BeforeTool hook | [docs/agents/gemini-cli.md](docs/agents/gemini-cli.md) |
+| **Cursor** | `changegate install cursor` | `.cursor/mcp.json` and a `beforeShellExecution` hook | [docs/agents/cursor.md](docs/agents/cursor.md) |
+| **Any MCP client** (Claude Desktop, VS Code, Windsurf, Zed, …) | one JSON snippet | MCP server only | [docs/agents/mcp-clients.md](docs/agents/mcp-clients.md) |
+| **Your own agents** (LangGraph, OpenAI Agents SDK, Claude Agent SDK, Vercel AI SDK) | Python / TypeScript SDK | client for a shared executor | [docs/agents/sdks.md](docs/agents/sdks.md) |
+
+Claude Code, Codex, OpenCode and Gemini CLI were tested end to end with each real CLI. The agent used
+`propose_change` → `apply_change` by itself, and a forced raw `psql DELETE` was blocked by the hook.
+
+### CI/CD and GitOps
+
+| Pipeline | What it does | Guide |
+| --- | --- | --- |
+| **GitHub Actions** | Rehearses migrations in PRs; posts a report comment and a `changegate/rehearsal` status; report or gate mode | [docs/ci/github-actions.md](docs/ci/github-actions.md) |
+| **GitLab CI/CD** | The same, as a CI/CD component, with MR notes and commit statuses | [docs/ci/gitlab.md](docs/ci/gitlab.md) |
+| **Terraform / OpenTofu** in any CI | `changegate tf review` classifies the plan and gates on policy | [docs/ci/terraform.md](docs/ci/terraform.md) |
+| **Kubernetes, Argo CD, Flux** | `changegate k8s gate` as a PR check or an Argo CD PreSync hook: a sync waits until its exact plan is approved | [docs/ci/kubernetes-gitops.md](docs/ci/kubernetes-gitops.md) |
+| **Any other CI** (Jenkins, CircleCI, Buildkite, …) | The `rehearse`, `gate`, `tf review` and `k8s gate` CLI commands, with exit codes | [docs/ci/other-ci.md](docs/ci/other-ci.md) |
+
+### Shared executor and gateways
+
+For teams, run `changegate executor serve` next to your systems (Helm chart or systemd). It holds the
+credentials, enforces policy and keeps the audit log. Agents, SDKs and gates call it with per-person tokens.
+MCP gateways (**Envoy**, **agentgateway**, **IBM ContextForge**) can ask it to authorize every tool call. See
+[docs/executor.md](docs/executor.md) and [docs/gateways.md](docs/gateways.md).
+
+## Safety model in brief
+
+- **Environment classes** (`personal`, `shared-dev`, `staging`, `prod`, `prod-restricted`) are bound to the
+  connection, never chosen by the agent.
+- **Reversibility classes:**
+  - `reversible`: exact undo.
+  - `compensatable`: an inverse call exists.
+  - `checkpoint-only`: needs a checkpoint to restore.
+  - `irreversible`: the policy sees this.
+- **Approvals bind to the plan hash.** If the data or the change moves after approval, it must be planned
+  again.
+- **Separation of duties:** out-of-band approvals must come from someone other than the proposer. Agents can't
+  approve.
+- **Dry runs never leak side effects.** Data changes run in a transaction that is always rolled back.
+  Statements with effects outside it (`dblink`, `pg_terminate_backend`, `DO` blocks) are never executed while
+  planning.
+- **Fail closed.** A policy rule that errors counts as "require approval", and gateways deny when Changegate is
+  unreachable.
+
+The details are in [docs/concepts.md](docs/concepts.md) and [docs/policy.md](docs/policy.md).
+
+## Documentation
+
+| | |
+| --- | --- |
+| [Getting started](docs/getting-started.md) | Install, first target, first agent session, undo |
+| [Concepts](docs/concepts.md) | Lanes, plans, environment and reversibility classes, sessions, checkpoints, approvals, audit |
+| [Configuration](docs/configuration.md) | `changegate.yaml` and target options for every adapter |
+| [Policy](docs/policy.md) | CEL rules, built-in defaults, approvals, Slack, Jev signals |
+| [Coding agents](docs/agents/) | Claude Code, Codex, OpenCode, Gemini CLI, Cursor, other MCP clients, SDKs |
+| [CI/CD](docs/ci/) | GitHub Actions, GitLab, Terraform, Kubernetes/GitOps, other CI |
+| [Shared executor](docs/executor.md) and [gateways](docs/gateways.md) | Team deployment, tokens, Helm, Envoy/agentgateway/ContextForge |
+| [CLI reference](docs/cli.md) | Every command and flag |
+| [Status](docs/m2-status.md) | What is done and verified, and the known gaps |
 
 ## Demo and benchmark
 
-- [`demo/replit`](demo/replit): *What would have saved the Replit database.* An agent deletes production data
-  during a code freeze. Changegate shows the exact rows, denies it, and undoes the same mistake on a dev copy in
-  one command.
-- [`bench`](bench): agent unsafe-action benchmark v0 (scripted actions). Unsafe-action rate 100% → 0%, false-block
-  rate 0%, median plan latency ~33 ms, median undo ~9 ms.
-
-## Repository layout
-
-```
-proto/changegate/v1/   Change Record + Adapter service (protobuf); gen/ holds generated Go
-spec/                  Human-readable spec and JSON Schema
-cmd/changegate/        CLI
-pkg/adapter/           Adapter SDK: types, plan hashing, go-plugin gRPC transport
-conformance/           Adapter conformance suite
-internal/engine        State machine;  internal/store  SQLite + hash-chained audit log
-internal/policy        CEL policy;     internal/session sessions, dependency-aware undo, rewind, branches
-internal/mcpserver     MCP server;     internal/mcpproxy  MCP proxy;  internal/hooks  agent hooks
-internal/migrations    Framework detection and writers;  internal/lanea  report, gate, provenance, GitHub/GitLab
-internal/approval      Slack approvals
-adapters/postgres      Postgres adapter (classifier, lint, dry-run plans, undo, soft-drop, checkpoints, rehearsal)
-adapters/toykv         Reference adapter for the conformance suite
-integrations/          GitHub Action, GitLab component, Claude Code plugin
-packaging/             npm (npx) and PyPI (uvx) launchers, Homebrew formula
-demo/, bench/          Replit-style demo, unsafe-action benchmark
-```
+- [`demo/replit`](demo/replit), *what would have saved the Replit database*: an agent deletes production data
+  during a code freeze. Changegate shows the exact rows, denies the change, and undoes the same mistake on a dev
+  copy in one command.
+- [`bench`](bench), agent unsafe-action benchmark v0: the unsafe-action rate drops from 100% to 0% with no false
+  blocks. Median plan latency is about 33 ms; median undo is about 9 ms.
 
 ## Development
 
 ```sh
-make pg            # start Postgres 18 (:55418) and 16 (:55416) in Docker for integration tests
-make test          # go test ./...
-make lint          # golangci-lint
-make build         # bin/changegate
-changegate adapter test postgres --dsn postgres://postgres:pg@localhost:55418/postgres   # conformance
+make pg     # Postgres 18 (:55418) and 16 (:55416) in Docker for integration tests
+make test   # go test ./...
+make lint   # golangci-lint
+make build  # bin/changegate
 ```
 
-`pg_query_go` uses cgo, so release binaries are built natively per platform (see `.github/workflows/release.yml`).
-
-Licensed under Apache-2.0.
+The code map is in [docs/development.md](docs/development.md). Licensed under Apache-2.0.

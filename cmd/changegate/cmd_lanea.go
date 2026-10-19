@@ -10,14 +10,14 @@ import (
 	"strings"
 	"time"
 
+	"github.com/jackc/pgx/v5"
+	"github.com/spf13/cobra"
 	"github.com/srawlin/changegate/adapters/postgres"
 	"github.com/srawlin/changegate/internal/lanea"
 	"github.com/srawlin/changegate/internal/migrations"
 	"github.com/srawlin/changegate/internal/model"
 	"github.com/srawlin/changegate/internal/policy"
 	"github.com/srawlin/changegate/pkg/adapter"
-	"github.com/jackc/pgx/v5"
-	"github.com/spf13/cobra"
 )
 
 // Framework bookkeeping tables, excluded from data comparisons.
@@ -152,13 +152,17 @@ func runRehearse(f *rehearseFlags) error {
 		for _, p := range f.newPaths {
 			want[filepath.Clean(p)] = true
 		}
-		isNew = func(m migrations.Migration) bool { return want[filepath.Clean(m.Path)] || want[filepath.Clean(m.DownPath)] }
+		isNew = func(m migrations.Migration) bool {
+			return want[filepath.Clean(m.Path)] || want[filepath.Clean(m.DownPath)]
+		}
 	case f.baseRef != "":
 		changed, err := changedFiles(f.dir, f.baseRef)
 		if err != nil {
 			return err
 		}
-		isNew = func(m migrations.Migration) bool { return changed[filepath.Clean(m.Path)] || (m.DownPath != "" && changed[filepath.Clean(m.DownPath)]) }
+		isNew = func(m migrations.Migration) bool {
+			return changed[filepath.Clean(m.Path)] || (m.DownPath != "" && changed[filepath.Clean(m.DownPath)])
+		}
 	case !f.all:
 		return errors.New("say which migrations are new: --base-ref REF, --new PATH, or --all")
 	}
@@ -344,6 +348,11 @@ func reportCmd() *cobra.Command {
 				}
 				fmt.Println("posted", u)
 				if status {
+					if state == "pending" && ev.Decision != nil {
+						if by, author, err := g.Approvals(); err == nil {
+							state, desc = reviewStatus(ev.Decision, by, author, state, desc)
+						}
+					}
 					if err := g.Status(state, desc, u); err != nil {
 						return err
 					}
@@ -361,6 +370,11 @@ func reportCmd() *cobra.Command {
 				}
 				fmt.Println("posted merge request note")
 				if status {
+					if state == "pending" && ev.Decision != nil {
+						if by, author, err := g.Approvals(); err == nil {
+							state, desc = reviewStatus(ev.Decision, by, author, state, desc)
+						}
+					}
 					gs := map[string]string{"success": "success", "failure": "failed", "pending": "pending"}[state]
 					if err := g.Status(gs, desc); err != nil {
 						return err
@@ -390,6 +404,20 @@ func appendFile(path, s string) error {
 	return err
 }
 
+// reviewStatus turns a pending "review required" status green once the
+// PR/MR approvals satisfy the decision's approvers.
+func reviewStatus(d *model.Decision, approvedBy []string, author, state, desc string) (string, string) {
+	ok, platform, why := lanea.Satisfied(d.Approvers, d.Quorum, approvedBy, author)
+	if !ok {
+		return state, desc + " (" + why + ")"
+	}
+	desc = "review satisfied: " + why
+	if len(platform) > 0 {
+		desc += "; " + strings.Join(platform, ", ") + " enforced by the platform"
+	}
+	return "success", desc
+}
+
 func statusOf(ev *lanea.Evidence) (state, desc string) {
 	if ev.Rehearsal != nil && !ev.Rehearsal.Passed {
 		return "failure", "rehearsal failed"
@@ -408,14 +436,16 @@ func statusOf(ev *lanea.Evidence) (state, desc string) {
 
 func gateCmd() *cobra.Command {
 	var env string
-	var reportOnly bool
+	var reportOnly, github, gitlab bool
 	cmd := &cobra.Command{
 		Use:   "gate EVIDENCE.json",
 		Short: "Decide from rehearsal evidence whether a change may deploy",
 		Long: `Apply policy to rehearsal evidence. Exit codes: 0 approved (standard change),
 2 review required (approvers printed), 3 denied, 1 rehearsal failed.
 With --report-only the decision is printed but the exit code is always 0
-(the recommended way to start: report, don't block).`,
+(the recommended way to start: report, don't block).
+With --github or --gitlab, approvals on the pull/merge request that satisfy
+"review required" (named user: approvers, quorum, never the author) pass the gate.`,
 		Args: cobra.ExactArgs(1),
 		RunE: func(_ *cobra.Command, args []string) error {
 			ev, err := readEvidence(args[0])
@@ -435,6 +465,33 @@ With --report-only the decision is printed but the exit code is always 0
 				return err
 			}
 			d := lanea.Decide(pol, ev)
+			reviewed := ""
+			if d.Decision == policy.Require && (github || gitlab) {
+				var by []string
+				var author string
+				var aerr error
+				if github {
+					if g, err := lanea.GitHubFromEnv(); err == nil {
+						by, author, aerr = g.Approvals()
+					} else {
+						aerr = err
+					}
+				} else if g, err := lanea.GitLabFromEnv(); err == nil {
+					by, author, aerr = g.Approvals()
+				} else {
+					aerr = err
+				}
+				if aerr != nil {
+					fmt.Fprintln(os.Stderr, "changegate: could not read approvals:", aerr)
+				} else if ok, platform, why := lanea.Satisfied(d.Approvers, d.Quorum, by, author); ok {
+					reviewed = why
+					if len(platform) > 0 {
+						reviewed += " (" + strings.Join(platform, ", ") + " enforced by the platform)"
+					}
+				} else {
+					fmt.Fprintln(os.Stderr, "review:", why)
+				}
+			}
 			if jsonOut {
 				_ = printJSON(d)
 			} else {
@@ -445,9 +502,12 @@ With --report-only the decision is printed but the exit code is always 0
 				for _, r := range d.Reasons {
 					fmt.Printf("reason: %s\n", r)
 				}
+				if reviewed != "" {
+					fmt.Printf("review: %s\n", reviewed)
+				}
 			}
 			if p := os.Getenv("GITHUB_OUTPUT"); p != "" {
-				_ = appendFile(p, fmt.Sprintf("decision=%s\napprovers=%s\n", d.Decision, strings.Join(d.Approvers, ",")))
+				_ = appendFile(p, fmt.Sprintf("decision=%s\napprovers=%s\nreviewed=%t\n", d.Decision, strings.Join(d.Approvers, ","), reviewed != ""))
 			}
 			if reportOnly {
 				return nil
@@ -459,6 +519,9 @@ With --report-only the decision is printed but the exit code is always 0
 			case policy.Deny:
 				return exitError{code: 3}
 			case policy.Require:
+				if reviewed != "" {
+					return nil
+				}
 				return exitError{code: 2}
 			}
 			return nil
@@ -466,6 +529,8 @@ With --report-only the decision is printed but the exit code is always 0
 	}
 	cmd.Flags().StringVar(&env, "env", "", "override the environment class (e.g. the deployment environment)")
 	cmd.Flags().BoolVar(&reportOnly, "report-only", false, "never fail; just print the decision")
+	cmd.Flags().BoolVar(&github, "github", false, "count GitHub pull request approvals toward \"review required\" (GitHub Actions env, GITHUB_TOKEN)")
+	cmd.Flags().BoolVar(&gitlab, "gitlab", false, "count GitLab merge request approvals toward \"review required\" (CHANGEGATE_GITLAB_TOKEN)")
 	return cmd
 }
 

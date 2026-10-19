@@ -6,9 +6,9 @@ import (
 	"math/rand"
 	"time"
 
+	"github.com/jackc/pgx/v5"
 	"github.com/srawlin/changegate/conformance"
 	"github.com/srawlin/changegate/pkg/adapter"
-	"github.com/jackc/pgx/v5"
 )
 
 // ConformanceFixture is the schema each conformance target starts from.

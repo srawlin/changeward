@@ -1,0 +1,59 @@
+image:
+  repository: ghcr.io/srawlin/changegate
+  tag: latest
+  pullPolicy: IfNotPresent
+
+# changegate.yaml for the executor. Keep secrets out of it: reference them as
+# ${VAR} and provide them through existingSecret (see env below).
+config: |
+  targets:
+    app:
+      adapter: postgres
+      env: shared-dev
+      dsn: ${APP_DATABASE_URL}
+  executor:
+    tokens: []   # add entries printed by `changegate executor token NAME`
+
+# Optional organization policy (changegate.policy.yaml). Your rules apply
+# before the built-in environment defaults; deny > require > approve.
+policy: ""
+
+# A Secret with environment variables (e.g. APP_DATABASE_URL, SLACK_BOT_TOKEN).
+existingSecret: ""
+
+serviceAccount:
+  create: true
+  name: ""
+
+# Kubernetes targets use the executor's in-cluster service account. Grant it
+# what the changes need, in the namespaces it manages (or clusterWide).
+rbac:
+  kubernetes:
+    enabled: false
+    clusterWide: false
+    namespaces: []      # e.g. [shop, payments]
+    rules:
+      - apiGroups: ["", "apps", "batch", "networking.k8s.io", "autoscaling", "policy"]
+        resources: ["*"]
+        verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+
+persistence:
+  # The audit log and change records live in SQLite on this volume. Single
+  # replica only until the Postgres store (server mode) is available.
+  enabled: true
+  size: 1Gi
+  storageClass: ""
+
+service:
+  type: ClusterIP
+  port: 8443
+
+resources: {}
+podSecurityContext:
+  runAsNonRoot: true
+  runAsUser: 10001
+  fsGroup: 10001
+securityContext:
+  allowPrivilegeEscalation: false
+  readOnlyRootFilesystem: true
+  capabilities: { drop: ["ALL"] }

@@ -9,14 +9,15 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/spf13/cobra"
 	"github.com/srawlin/changegate/adapters/postgres"
 	"github.com/srawlin/changegate/internal/config"
 	"github.com/srawlin/changegate/internal/engine"
+	"github.com/srawlin/changegate/internal/executor"
 	"github.com/srawlin/changegate/internal/model"
 	"github.com/srawlin/changegate/internal/session"
 	"github.com/srawlin/changegate/internal/store"
 	"github.com/srawlin/changegate/pkg/adapter"
-	"github.com/spf13/cobra"
 )
 
 func (a *app) sessions() (*session.Service, error) {
@@ -196,6 +197,12 @@ func operationKind(adapterName string) string {
 		return "sql"
 	case "toykv":
 		return "kv"
+	case "kubernetes":
+		return "k8s"
+	case "configfile":
+		return "file"
+	case "httpapi":
+		return "http"
 	}
 	return adapterName
 }
@@ -393,7 +400,7 @@ func applyCmd() *cobra.Command {
 }
 
 func approveCmd(approve bool) *cobra.Command {
-	var reason, as, channel string
+	var reason, as, channel, executorURL string
 	use, short := "approve REF", "Approve a pending change (binds to its exact plan hash)"
 	if !approve {
 		use, short = "reject REF", "Reject a pending change"
@@ -403,6 +410,34 @@ func approveCmd(approve bool) *cobra.Command {
 		Short: short,
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
+			if os.Getenv("CHANGEGATE_AGENT") != "" {
+				return errors.New("approvals cannot be issued from an agent session")
+			}
+			if executorURL == "" {
+				executorURL = os.Getenv("CHANGEGATE_EXECUTOR_URL")
+			}
+			if executorURL != "" {
+				// On a shared executor the approver is the token's identity.
+				cl := executor.NewClient(executorURL, os.Getenv("CHANGEGATE_EXECUTOR_TOKEN"))
+				c, err := cl.Get(bg(), args[0])
+				if err != nil {
+					return err
+				}
+				if c.Plan == nil {
+					return fmt.Errorf("change %s has no plan", c.ID)
+				}
+				if !jsonOut && approve {
+					fmt.Print(c.Plan.Diff)
+				}
+				if c, err = cl.Approve(bg(), c.ID, c.Plan.Hash, approve, reason); err != nil {
+					return err
+				}
+				if jsonOut {
+					return printJSON(c)
+				}
+				fmt.Printf("change %s — %s\n", c.ID, c.State)
+				return nil
+			}
 			a, err := newApp()
 			if err != nil {
 				return err
@@ -419,9 +454,6 @@ func approveCmd(approve bool) *cobra.Command {
 			who := humanIdentity()
 			if as != "" {
 				who = "user:" + strings.TrimPrefix(as, "user:")
-			}
-			if os.Getenv("CHANGEGATE_AGENT") != "" {
-				return errors.New("approvals cannot be issued from an agent session")
 			}
 			c, err = eng.Approve(bg(), c.ID, engine.ApproveRequest{PlanHash: c.Plan.Hash, Approver: who, Channel: channel, Approved: approve, Reason: reason})
 			if err != nil {
@@ -440,6 +472,7 @@ func approveCmd(approve bool) *cobra.Command {
 	cmd.Flags().StringVar(&reason, "reason", "", "reason")
 	cmd.Flags().StringVar(&as, "as", "", "approver identity (local mode; server mode uses SSO)")
 	cmd.Flags().StringVar(&channel, "channel", "terminal", "approval channel")
+	cmd.Flags().StringVar(&executorURL, "executor", "", "approve on a shared executor (default $CHANGEGATE_EXECUTOR_URL; token from $CHANGEGATE_EXECUTOR_TOKEN, approve role)")
 	return cmd
 }
 

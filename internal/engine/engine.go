@@ -46,12 +46,18 @@ type Notifier interface {
 	NotifyPending(ctx context.Context, c *model.Change) error
 }
 
+// Observer is told about every committed transition (e.g. OTel export).
+type Observer interface {
+	Observe(ctx context.Context, c *model.Change, from, to model.State)
+}
+
 // Engine drives changes through their lifecycle.
 type Engine struct {
 	Store    store.Store
 	Adapters Registry
 	Policy   *policy.Engine
 	Notifier Notifier
+	Observer Observer
 	PlanTTL  time.Duration
 	Now      func() time.Time
 	// Signals, if set, is consulted when policy would auto-approve a change
@@ -97,6 +103,9 @@ func (e *Engine) transition(ctx context.Context, c *model.Change, to model.State
 	if err := e.Store.UpdateChange(ctx, c, &ev); err != nil {
 		c.State = prev
 		return err
+	}
+	if e.Observer != nil {
+		e.Observer.Observe(ctx, c, prev, to)
 	}
 	return nil
 }

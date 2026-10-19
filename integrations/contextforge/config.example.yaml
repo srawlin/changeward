@@ -1,0 +1,13 @@
+# plugins/config.yaml in IBM ContextForge MCP Gateway
+plugins:
+  - name: "Changegate"
+    kind: "changegate_contextforge.plugin.ChangegatePlugin"
+    hooks: ["tool_pre_invoke"]
+    mode: "enforce"
+    priority: 10
+    config:
+      executor_url: "http://changegate-executor.changegate.svc:8443"
+      token_env: CHANGEGATE_GATEWAY_TOKEN
+      env: prod
+      fail_closed: true
+      read_only_tools: ["*-list-*", "*-get-*"]   # globs of tools that only read
