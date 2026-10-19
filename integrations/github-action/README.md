@@ -18,7 +18,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with: { fetch-depth: 0 }
-      - uses: changegate/rehearse@v0
+      - uses: srawlin/changegate/integrations/github-action@main   # pin a release tag once published
         with:
           mode: report          # start with report; switch to gate when you trust it
           synthetic-rows: 1000  # T1; set 0 for schema-only T0
@@ -30,4 +30,4 @@ the data lives; pass `database-url` pointing at that server. Reports never conta
 Detected frameworks: Flyway, Liquibase (formatted SQL), Atlas, Prisma, golang-migrate, goose, Sqitch (run directly);
 Rails, Django, Alembic (pass `up-cmd` / `down-cmd`, e.g. `bin/rails db:migrate` / `bin/rails db:rollback STEP={n}`).
 
-The Marketplace listing is published from the `changegate/rehearse` repository, which mirrors this directory.
+Full guide: [docs/ci/github-actions.md](../../docs/ci/github-actions.md).

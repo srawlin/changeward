@@ -121,7 +121,7 @@ runs:
         INPUT_POLICY: ${{ inputs.policy }}
         INPUT_UP: ${{ inputs.up-cmd }}
         INPUT_DOWN: ${{ inputs.down-cmd }}
-        BASE_REF: ${{ github.base_ref }}
+        BASE_REF: ${{ github.base_ref || github.event.pull_request.base.ref }}   # base_ref is empty on pull_request_review
       run: |
         set -uo pipefail
         base="${INPUT_BASE:-}"
