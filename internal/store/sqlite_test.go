@@ -6,9 +6,9 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/changegate/changegate/internal/model"
-	"github.com/changegate/changegate/internal/store"
-	"github.com/changegate/changegate/pkg/adapter"
+	"github.com/srawlin/changegate/internal/model"
+	"github.com/srawlin/changegate/internal/store"
+	"github.com/srawlin/changegate/pkg/adapter"
 )
 
 func open(t *testing.T) *store.SQLite {

@@ -10,10 +10,10 @@ import (
 	"strings"
 	"time"
 
-	"github.com/changegate/changegate/adapters/postgres"
-	"github.com/changegate/changegate/internal/migrations"
-	"github.com/changegate/changegate/internal/model"
-	"github.com/changegate/changegate/internal/session"
+	"github.com/srawlin/changegate/adapters/postgres"
+	"github.com/srawlin/changegate/internal/migrations"
+	"github.com/srawlin/changegate/internal/model"
+	"github.com/srawlin/changegate/internal/session"
 	"github.com/spf13/cobra"
 )
 

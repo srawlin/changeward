@@ -11,7 +11,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/changegate/changegate/internal/model"
+	"github.com/srawlin/changegate/internal/model"
 
 	_ "modernc.org/sqlite" // registers the "sqlite" driver
 )

@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/changegate/changegate/pkg/adapter"
+	"github.com/srawlin/changegate/pkg/adapter"
 	pg "github.com/pganalyze/pg_query_go/v6"
 	"google.golang.org/protobuf/proto"
 )

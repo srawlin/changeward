@@ -7,7 +7,7 @@ branding:
 
 inputs:
   version:
-    description: Changegate version to install (a release tag such as v0.1.0, or "source" to build with Go).
+    description: Changegate version to install (a release tag such as v0.1.0, "source" to go install the latest commit, or "local" to build the checked-out repository).
     default: latest
   database-url:
     description: Admin DSN of a scratch Postgres server Changegate may CREATE DATABASE on. If empty, the action starts Postgres in Docker.
@@ -63,6 +63,13 @@ outputs:
 runs:
   using: composite
   steps:
+    - name: Set up Go (source builds)
+      if: inputs.version == 'source' || inputs.version == 'local'
+      uses: actions/setup-go@v5
+      with:
+        go-version: "1.27"
+        cache: false
+
     - name: Install changegate
       shell: bash
       env:
@@ -70,13 +77,15 @@ runs:
       run: |
         set -euo pipefail
         bin="$RUNNER_TEMP/changegate-bin"; mkdir -p "$bin"
-        if [ "$CG_VERSION" = "source" ]; then
-          GOBIN="$bin" go install github.com/changegate/changegate/cmd/changegate@latest
+        if [ "$CG_VERSION" = "local" ]; then
+          (cd "$GITHUB_WORKSPACE" && CGO_ENABLED=1 go build -o "$bin/changegate" ./cmd/changegate)
+        elif [ "$CG_VERSION" = "source" ]; then
+          GOBIN="$bin" go install github.com/srawlin/changegate/cmd/changegate@latest
         else
           os=$(uname -s | tr '[:upper:]' '[:lower:]'); arch=$(uname -m)
           case "$arch" in x86_64) arch=amd64;; aarch64|arm64) arch=arm64;; esac
-          if [ "$CG_VERSION" = "latest" ]; then base="https://github.com/changegate/changegate/releases/latest/download"
-          else base="https://github.com/changegate/changegate/releases/download/$CG_VERSION"; fi
+          if [ "$CG_VERSION" = "latest" ]; then base="https://github.com/srawlin/changegate/releases/latest/download"
+          else base="https://github.com/srawlin/changegate/releases/download/$CG_VERSION"; fi
           asset="changegate_${os}_${arch}.tar.gz"
           curl -fsSL "$base/$asset" -o "$RUNNER_TEMP/$asset"
           curl -fsSL "$base/checksums.txt" -o "$RUNNER_TEMP/checksums.txt"

@@ -10,7 +10,7 @@ import (
 	"sort"
 	"time"
 
-	"github.com/changegate/changegate/pkg/adapter"
+	"github.com/srawlin/changegate/pkg/adapter"
 	"gopkg.in/yaml.v3"
 )
 

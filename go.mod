@@ -1,4 +1,4 @@
-module github.com/changegate/changegate
+module github.com/srawlin/changegate
 
 go 1.27.1
 

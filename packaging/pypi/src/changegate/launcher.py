@@ -10,7 +10,7 @@ import urllib.request
 
 from . import __version__
 
-BASE = os.environ.get("CHANGEGATE_DOWNLOAD_BASE", f"https://github.com/changegate/changegate/releases/download/v{__version__}")
+BASE = os.environ.get("CHANGEGATE_DOWNLOAD_BASE", f"https://github.com/srawlin/changegate/releases/download/v{__version__}")
 
 
 def _fail(msg):

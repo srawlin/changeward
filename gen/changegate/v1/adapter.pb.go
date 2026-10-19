@@ -1947,7 +1947,7 @@ const file_changegate_v1_adapter_proto_rawDesc = "" +
 	"Checkpoint\x12 .changegate.v1.CheckpointRequest\x1a\x1c.changegate.v1.CheckpointRef\x12@\n" +
 	"\aRestore\x12\x1d.changegate.v1.RestoreRequest\x1a\x16.changegate.v1.Receipt\x12C\n" +
 	"\rProvisionCopy\x12\x1a.changegate.v1.CopyRequest\x1a\x16.changegate.v1.CopyRef\x12T\n" +
-	"\vReleaseCopy\x12!.changegate.v1.ReleaseCopyRequest\x1a\".changegate.v1.ReleaseCopyResponseBAZ?github.com/changegate/changegate/gen/changegate/v1;changegatev1b\x06proto3"
+	"\vReleaseCopy\x12!.changegate.v1.ReleaseCopyRequest\x1a\".changegate.v1.ReleaseCopyResponseB>Z<github.com/srawlin/changegate/gen/changegate/v1;changegatev1b\x06proto3"
 
 var (
 	file_changegate_v1_adapter_proto_rawDescOnce sync.Once

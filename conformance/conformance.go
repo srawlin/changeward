@@ -17,7 +17,7 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/changegate/changegate/pkg/adapter"
+	"github.com/srawlin/changegate/pkg/adapter"
 )
 
 // Driver describes how to test one adapter.

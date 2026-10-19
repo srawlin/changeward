@@ -16,12 +16,12 @@ import (
 	"testing"
 	"time"
 
-	"github.com/changegate/changegate/adapters/toykv"
-	"github.com/changegate/changegate/internal/engine"
-	"github.com/changegate/changegate/internal/model"
-	"github.com/changegate/changegate/internal/policy"
-	"github.com/changegate/changegate/internal/store"
-	"github.com/changegate/changegate/pkg/adapter"
+	"github.com/srawlin/changegate/adapters/toykv"
+	"github.com/srawlin/changegate/internal/engine"
+	"github.com/srawlin/changegate/internal/model"
+	"github.com/srawlin/changegate/internal/policy"
+	"github.com/srawlin/changegate/internal/store"
+	"github.com/srawlin/changegate/pkg/adapter"
 )
 
 func sign(secret, ts string, body []byte) string {

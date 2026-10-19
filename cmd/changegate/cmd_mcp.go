@@ -10,11 +10,11 @@ import (
 	"path/filepath"
 	"syscall"
 
-	"github.com/changegate/changegate/adapters/postgres"
-	"github.com/changegate/changegate/internal/hooks"
-	"github.com/changegate/changegate/internal/mcpproxy"
-	"github.com/changegate/changegate/internal/mcpserver"
-	"github.com/changegate/changegate/internal/model"
+	"github.com/srawlin/changegate/adapters/postgres"
+	"github.com/srawlin/changegate/internal/hooks"
+	"github.com/srawlin/changegate/internal/mcpproxy"
+	"github.com/srawlin/changegate/internal/mcpserver"
+	"github.com/srawlin/changegate/internal/model"
 	"github.com/spf13/cobra"
 )
 

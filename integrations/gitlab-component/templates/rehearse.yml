@@ -35,7 +35,7 @@ changegate-rehearse:
     - |
       arch=$(uname -m); case "$arch" in x86_64) arch=amd64;; aarch64) arch=arm64;; esac
       v="$[[ inputs.version ]]"
-      if [ "$v" = "latest" ]; then base="https://github.com/changegate/changegate/releases/latest/download"; else base="https://github.com/changegate/changegate/releases/download/$v"; fi
+      if [ "$v" = "latest" ]; then base="https://github.com/srawlin/changegate/releases/latest/download"; else base="https://github.com/srawlin/changegate/releases/download/$v"; fi
       curl -fsSL "$base/changegate_linux_${arch}.tar.gz" -o /tmp/cg.tgz
       curl -fsSL "$base/checksums.txt" -o /tmp/checksums.txt
       (cd /tmp && grep " changegate_linux_${arch}.tar.gz\$" checksums.txt | sed "s| changegate_linux_${arch}.tar.gz| cg.tgz|" | sha256sum -c -)

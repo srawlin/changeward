@@ -12,8 +12,8 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/changegate/changegate/internal/approval"
-	"github.com/changegate/changegate/internal/engine"
+	"github.com/srawlin/changegate/internal/approval"
+	"github.com/srawlin/changegate/internal/engine"
 	"github.com/spf13/cobra"
 )
 

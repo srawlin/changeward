@@ -3,9 +3,9 @@ package lanea
 import (
 	"strings"
 
-	"github.com/changegate/changegate/internal/model"
-	"github.com/changegate/changegate/internal/policy"
-	"github.com/changegate/changegate/pkg/adapter"
+	"github.com/srawlin/changegate/internal/model"
+	"github.com/srawlin/changegate/internal/policy"
+	"github.com/srawlin/changegate/pkg/adapter"
 )
 
 // Decide applies policy to rehearsal evidence (lane "ci"). The policy sees

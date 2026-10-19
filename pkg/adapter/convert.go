@@ -1,7 +1,7 @@
 package adapter
 
 import (
-	pb "github.com/changegate/changegate/gen/changegate/v1"
+	pb "github.com/srawlin/changegate/gen/changegate/v1"
 )
 
 var revToPB = map[Reversibility]pb.Reversibility{

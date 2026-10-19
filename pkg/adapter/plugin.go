@@ -7,7 +7,7 @@ import (
 	"os/exec"
 	"strings"
 
-	pb "github.com/changegate/changegate/gen/changegate/v1"
+	pb "github.com/srawlin/changegate/gen/changegate/v1"
 	"github.com/hashicorp/go-hclog"
 	"github.com/hashicorp/go-plugin"
 	"google.golang.org/grpc"

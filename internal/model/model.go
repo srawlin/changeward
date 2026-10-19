@@ -5,7 +5,7 @@ package model
 import (
 	"encoding/json"
 
-	"github.com/changegate/changegate/pkg/adapter"
+	"github.com/srawlin/changegate/pkg/adapter"
 )
 
 // State is a change lifecycle state.

@@ -8,7 +8,7 @@ syntax = "proto3";
 
 package changegate.v1;
 
-option go_package = "github.com/changegate/changegate/gen/changegate/v1;changegatev1";
+option go_package = "github.com/srawlin/changegate/gen/changegate/v1;changegatev1";
 
 // Reversibility class of a change. Drives policy.
 enum Reversibility {

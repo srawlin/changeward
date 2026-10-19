@@ -6,7 +6,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/changegate/changegate/pkg/adapter"
+	"github.com/srawlin/changegate/pkg/adapter"
 	"github.com/jackc/pgx/v5"
 )
 

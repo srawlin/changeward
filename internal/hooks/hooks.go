@@ -9,8 +9,8 @@ import (
 	"regexp"
 	"strings"
 
-	"github.com/changegate/changegate/adapters/postgres"
-	"github.com/changegate/changegate/pkg/adapter"
+	"github.com/srawlin/changegate/adapters/postgres"
+	"github.com/srawlin/changegate/pkg/adapter"
 )
 
 // Decision is a hook verdict.

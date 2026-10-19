@@ -4,7 +4,7 @@ import (
 	"context"
 	"testing"
 
-	"github.com/changegate/changegate/conformance"
+	"github.com/srawlin/changegate/conformance"
 )
 
 // TestConformance runs the adapter conformance suite (generated operation

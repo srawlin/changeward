@@ -12,10 +12,10 @@ import (
 	"strings"
 	"time"
 
-	"github.com/changegate/changegate/internal/engine"
-	"github.com/changegate/changegate/internal/model"
-	"github.com/changegate/changegate/internal/store"
-	"github.com/changegate/changegate/pkg/adapter"
+	"github.com/srawlin/changegate/internal/engine"
+	"github.com/srawlin/changegate/internal/model"
+	"github.com/srawlin/changegate/internal/store"
+	"github.com/srawlin/changegate/pkg/adapter"
 )
 
 // TargetResolver resolves a target name to a connection (with config).

@@ -6,8 +6,8 @@ import (
 	"math/rand"
 	"time"
 
-	"github.com/changegate/changegate/conformance"
-	"github.com/changegate/changegate/pkg/adapter"
+	"github.com/srawlin/changegate/conformance"
+	"github.com/srawlin/changegate/pkg/adapter"
 	"github.com/jackc/pgx/v5"
 )
 

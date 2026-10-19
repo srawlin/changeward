@@ -5,7 +5,7 @@ import (
 	"io"
 	"strings"
 
-	"github.com/changegate/changegate/internal/model"
+	"github.com/srawlin/changegate/internal/model"
 )
 
 func decisionLine(c *model.Change) string {

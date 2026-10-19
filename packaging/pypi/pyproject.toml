@@ -12,7 +12,7 @@ requires-python = ">=3.9"
 keywords = ["mcp", "postgres", "agents", "database", "undo", "change-control", "migrations"]
 
 [project.urls]
-Homepage = "https://github.com/changegate/changegate"
+Homepage = "https://github.com/srawlin/changegate"
 
 [project.scripts]
 changegate = "changegate.launcher:main"

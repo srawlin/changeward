@@ -11,7 +11,7 @@ import (
 	"os"
 	"time"
 
-	"github.com/changegate/changegate/pkg/adapter"
+	"github.com/srawlin/changegate/pkg/adapter"
 )
 
 // Neon branching (https://api-docs.neon.tech). Target options:

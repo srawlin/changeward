@@ -67,7 +67,7 @@ jobs:
             s=$(grep "changegate_${p}.tar.gz" dist/checksums.txt | cut -d' ' -f1)
             sed -i "s/SHA256_$(echo $p | tr a-z A-Z)/$s/" $f
           done
-          git clone "https://x-access-token:${TAP_TOKEN}@github.com/changegate/homebrew-tap" tap
+          git clone "https://x-access-token:${TAP_TOKEN}@github.com/srawlin/homebrew-tap" tap
           cp $f tap/Formula/changegate.rb
           cd tap && git -c user.name=changegate-bot -c user.email=bot@changegate.dev commit -am "changegate $v" && git push
       - uses: docker/setup-buildx-action@v3
@@ -78,4 +78,4 @@ jobs:
           push: true
           platforms: linux/amd64,linux/arm64
           build-args: VERSION=${{ github.ref_name }}
-          tags: ghcr.io/changegate/changegate:${{ github.ref_name }},ghcr.io/changegate/changegate:latest
+          tags: ghcr.io/srawlin/changegate:${{ github.ref_name }},ghcr.io/srawlin/changegate:latest

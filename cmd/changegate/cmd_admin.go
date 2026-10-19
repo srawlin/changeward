@@ -8,12 +8,12 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/changegate/changegate/adapters/postgres"
-	"github.com/changegate/changegate/adapters/toykv"
-	"github.com/changegate/changegate/conformance"
-	"github.com/changegate/changegate/internal/policy"
-	"github.com/changegate/changegate/internal/store"
-	"github.com/changegate/changegate/pkg/adapter"
+	"github.com/srawlin/changegate/adapters/postgres"
+	"github.com/srawlin/changegate/adapters/toykv"
+	"github.com/srawlin/changegate/conformance"
+	"github.com/srawlin/changegate/internal/policy"
+	"github.com/srawlin/changegate/internal/store"
+	"github.com/srawlin/changegate/pkg/adapter"
 	"github.com/spf13/cobra"
 )
 

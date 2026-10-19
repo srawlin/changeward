@@ -20,8 +20,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/changegate/changegate/internal/engine"
-	"github.com/changegate/changegate/internal/model"
+	"github.com/srawlin/changegate/internal/engine"
+	"github.com/srawlin/changegate/internal/model"
 )
 
 // Slack posts approval requests and handles interactions.

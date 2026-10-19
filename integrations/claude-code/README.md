@@ -14,7 +14,7 @@ Lets Claude Code act on your database through Changegate instead of raw SQL:
 Plugin (from this repository's marketplace):
 
 ```
-/plugin marketplace add changegate/changegate
+/plugin marketplace add srawlin/changegate
 /plugin install changegate@changegate
 ```
 

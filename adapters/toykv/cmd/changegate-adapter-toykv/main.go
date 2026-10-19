@@ -2,8 +2,8 @@
 package main
 
 import (
-	"github.com/changegate/changegate/adapters/toykv"
-	"github.com/changegate/changegate/pkg/adapter"
+	"github.com/srawlin/changegate/adapters/toykv"
+	"github.com/srawlin/changegate/pkg/adapter"
 )
 
 func main() { adapter.Serve(toykv.New()) }

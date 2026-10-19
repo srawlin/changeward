@@ -13,7 +13,7 @@ const path = require('path');
 const zlib = require('zlib');
 
 const version = require('../package.json').version;
-const base = process.env.CHANGEGATE_DOWNLOAD_BASE || `https://github.com/changegate/changegate/releases/download/v${version}`;
+const base = process.env.CHANGEGATE_DOWNLOAD_BASE || `https://github.com/srawlin/changegate/releases/download/v${version}`;
 const platform = { darwin: 'darwin', linux: 'linux' }[process.platform];
 const arch = { x64: 'amd64', arm64: 'arm64' }[process.arch];
 

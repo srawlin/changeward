@@ -7,7 +7,7 @@ package changegate.v1;
 
 import "changegate/v1/adapter.proto";
 
-option go_package = "github.com/changegate/changegate/gen/changegate/v1;changegatev1";
+option go_package = "github.com/srawlin/changegate/gen/changegate/v1;changegatev1";
 
 // Lifecycle states. See spec/README.md for allowed transitions.
 enum State {

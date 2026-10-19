@@ -5,11 +5,11 @@ import (
 	"errors"
 	"testing"
 
-	"github.com/changegate/changegate/internal/engine"
-	"github.com/changegate/changegate/internal/model"
-	"github.com/changegate/changegate/internal/policy"
-	"github.com/changegate/changegate/internal/signals"
-	"github.com/changegate/changegate/pkg/adapter"
+	"github.com/srawlin/changegate/internal/engine"
+	"github.com/srawlin/changegate/internal/model"
+	"github.com/srawlin/changegate/internal/policy"
+	"github.com/srawlin/changegate/internal/signals"
+	"github.com/srawlin/changegate/pkg/adapter"
 )
 
 type fakeSignals struct {

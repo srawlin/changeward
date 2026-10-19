@@ -908,7 +908,7 @@ const file_changegate_v1_change_proto_rawDesc = "" +
 	"\x06FAILED\x10\f\x12\v\n" +
 	"\aUNDOING\x10\r\x12\n" +
 	"\n" +
-	"\x06UNDONE\x10\x0eBAZ?github.com/changegate/changegate/gen/changegate/v1;changegatev1b\x06proto3"
+	"\x06UNDONE\x10\x0eB>Z<github.com/srawlin/changegate/gen/changegate/v1;changegatev1b\x06proto3"
 
 var (
 	file_changegate_v1_change_proto_rawDescOnce sync.Once

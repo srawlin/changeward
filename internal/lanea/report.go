@@ -5,9 +5,9 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/changegate/changegate/adapters/postgres"
-	"github.com/changegate/changegate/internal/model"
-	"github.com/changegate/changegate/pkg/adapter"
+	"github.com/srawlin/changegate/adapters/postgres"
+	"github.com/srawlin/changegate/internal/model"
+	"github.com/srawlin/changegate/pkg/adapter"
 )
 
 // Marker identifies Changegate's PR/MR comment so it can be updated in place.

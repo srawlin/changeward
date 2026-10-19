@@ -12,13 +12,13 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/changegate/changegate/adapters/postgres"
-	"github.com/changegate/changegate/internal/engine"
-	"github.com/changegate/changegate/internal/model"
-	"github.com/changegate/changegate/internal/policy"
-	"github.com/changegate/changegate/internal/session"
-	"github.com/changegate/changegate/internal/store"
-	"github.com/changegate/changegate/pkg/adapter"
+	"github.com/srawlin/changegate/adapters/postgres"
+	"github.com/srawlin/changegate/internal/engine"
+	"github.com/srawlin/changegate/internal/model"
+	"github.com/srawlin/changegate/internal/policy"
+	"github.com/srawlin/changegate/internal/session"
+	"github.com/srawlin/changegate/internal/store"
+	"github.com/srawlin/changegate/pkg/adapter"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
 

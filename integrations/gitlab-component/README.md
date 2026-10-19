@@ -2,7 +2,7 @@
 
 ```yaml
 include:
-  - component: gitlab.com/changegate/changegate/rehearse@0.1.0
+  - component: gitlab.com/rawlinson-software-inc-group/test/rehearse@main
     inputs:
       mode: report
       synthetic-rows: 1000
