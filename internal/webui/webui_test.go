@@ -54,11 +54,19 @@ func TestWebUI(t *testing.T) {
 		t.Fatalf("no undo form:\n%s", page)
 	}
 	client := &http.Client{CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }}
-	r, _ := client.PostForm(srv.URL+"/changes/"+c.ID+"/undo", url.Values{"token": {"wrong"}})
+	r, err := client.PostForm(srv.URL+"/changes/"+c.ID+"/undo", url.Values{"token": {"wrong"}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	_ = r.Body.Close()
 	if r.StatusCode != http.StatusForbidden {
 		t.Fatalf("missing CSRF protection: %d", r.StatusCode)
 	}
-	r, _ = client.PostForm(srv.URL+"/changes/"+c.ID+"/undo", url.Values{"token": {m[1]}, "chain": {"1"}})
+	r, err = client.PostForm(srv.URL+"/changes/"+c.ID+"/undo", url.Values{"token": {m[1]}, "chain": {"1"}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	_ = r.Body.Close()
 	if r.StatusCode != http.StatusSeeOther {
 		t.Fatalf("undo: %d", r.StatusCode)
 	}
