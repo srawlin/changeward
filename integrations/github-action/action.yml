@@ -146,7 +146,9 @@ runs:
       shell: bash
       env:
         GITHUB_TOKEN: ${{ inputs.github-token }}
-      run: changegate report "${{ steps.rehearse.outputs.evidence }}" --github --status || echo "::warning::could not post the Changegate report (token permissions: pull-requests: write, statuses: write)"
+      run: |
+        changegate report "${{ steps.rehearse.outputs.evidence }}" --github --status \
+          || echo "::warning::could not post the Changegate report (needs permissions pull-requests: write and statuses: write)"
 
     - name: Gate
       id: gate
