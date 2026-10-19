@@ -44,6 +44,14 @@ Postgres 16/18, MySQL 8.4, a kind cluster, Terraform, and NGINX in Docker.
   1s; promote-to-PR used." This needs a design partner. Measured plan latency is about 30–100 ms on local Postgres
   (benchmark); promote-to-PR was verified on GitHub (PR #2).
 
+## Jev in M2
+
+`changegate sensitive suggest [--apply]` asks Jev, per column, whether the table/column name and type suggest personal
+or secret data. Only schema names and types are sent, never row values. Suggestions can only add redaction. On a
+test schema it flagged exactly the 7 sensitive columns (email, full_name, password_hash, last_login_ip, dob,
+shipping_address, api_token; scores 0.96–0.99) and none of the 7 others. Two uses were considered and rejected
+because they would let a model loosen a decision: classifying unannotated MCP tools, and choosing reversibility.
+
 ## Also done during M2
 
 - Finished M1 verification on GitHub: CI on GitHub with all services; the Action on real PRs (comment, status, gate);

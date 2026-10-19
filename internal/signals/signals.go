@@ -155,3 +155,52 @@ func (t Thresholds) Tighten(s map[string]float64) []string {
 	}
 	return out
 }
+
+// Nouls asks Jev independent 0..1 questions about one state (question ID →
+// instruction) and returns the answers by ID.
+func (j *Jev) Nouls(ctx context.Context, state any, questions map[string]string) (map[string]float64, error) {
+	url, model := j.URL, j.Model
+	if url == "" {
+		url = "https://api.typesafe.ai/v1/systemone"
+	}
+	if model == "" {
+		model = "jev-latest"
+	}
+	qs := map[string]jevQuestion{}
+	for id, ins := range questions {
+		qs[id] = jevQuestion{Type: "noul", Instructions: ins}
+	}
+	body, _ := json.Marshal(map[string]any{"model": model, "state": state, "questions": qs})
+	ctx, cancel := context.WithTimeout(ctx, 30*time.Second)
+	defer cancel()
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, url, bytes.NewReader(body))
+	if err != nil {
+		return nil, err
+	}
+	req.Header.Set("Authorization", "Bearer "+j.APIKey)
+	req.Header.Set("Content-Type", "application/json")
+	client := j.Client
+	if client == nil {
+		client = http.DefaultClient
+	}
+	resp, err := client.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	defer func() { _ = resp.Body.Close() }()
+	b, _ := io.ReadAll(io.LimitReader(resp.Body, 4<<20))
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("jev: %s: %s", resp.Status, bytes.TrimSpace(b))
+	}
+	var r jevResponse
+	if err := json.Unmarshal(b, &r); err != nil {
+		return nil, err
+	}
+	out := map[string]float64{}
+	for k, a := range r.Answers {
+		if a.Noul != nil {
+			out[k] = *a.Noul
+		}
+	}
+	return out, nil
+}
