@@ -171,3 +171,31 @@ type Checkpoint struct {
 	SessionID string                `json:"session_id,omitempty"`
 	Ref       adapter.CheckpointRef `json:"ref"`
 }
+
+// Changeset states.
+const (
+	CSPlanned      State = "planned"
+	CSAwaiting     State = "awaiting-approval"
+	CSApproved     State = "approved"
+	CSRejected     State = "rejected"
+	CSApplying     State = "applying"
+	CSApplied      State = "applied"
+	CSCompensating State = "compensating"
+	CSCompensated  State = "compensated"
+	CSFailed       State = "failed" // a step failed and compensation did not complete
+)
+
+// Changeset is an ordered group of changes, possibly across adapters,
+// applied as a saga: if step k fails, steps k-1..1 are undone in reverse.
+type Changeset struct {
+	ID        string    `json:"id"`
+	SessionID string    `json:"session_id,omitempty"`
+	Name      string    `json:"name,omitempty"`
+	Changes   []string  `json:"changes"` // change IDs in apply order
+	State     State     `json:"state"`
+	Decision  *Decision `json:"decision,omitempty"` // strictest of the members
+	FailedAt  int       `json:"failed_at,omitempty"` // 1-based step that failed
+	Error     string    `json:"error,omitempty"`
+	CreatedAt string    `json:"created_at"`
+	UpdatedAt string    `json:"updated_at"`
+}
