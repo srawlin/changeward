@@ -4,14 +4,14 @@
 # In July 2025 an AI coding agent, during an explicit code freeze, ran
 # destructive commands against a production database and wiped records for
 # 1,206 executives and 1,196 companies. This script replays that kind of
-# action through Changegate.
+# action through Changeward.
 #
-#   cd demo/replit && ./run.sh            (needs Docker and a changegate binary on PATH or in $CG)
+#   cd demo/replit && ./run.sh            (needs Docker and a changeward binary on PATH or in $CG)
 set -euo pipefail
 cd "$(dirname "$0")"
-CG=${CG:-changegate}
-export CHANGEGATE_STORE="$PWD/.changegate/demo.db"
-rm -rf .changegate
+CG=${CG:-changeward}
+export CHANGEWARD_STORE="$PWD/.changeward/demo.db"
+rm -rf .changeward
 step() { printf '\n\033[1;34m== %s\033[0m\n' "$*"; }
 run() { printf '\033[2m$ %s\033[0m\n' "$*"; "$@" || true; }
 
@@ -23,11 +23,11 @@ psqlc -d saastr < seed.sql
 psqlc -c "CREATE DATABASE saastr_dev TEMPLATE saastr"
 psqlc -d saastr -tA -c "SELECT 'executives: ' || count(*) FROM executives UNION ALL SELECT 'companies:  ' || count(*) FROM companies"
 
-export CHANGEGATE_AGENT=replit-agent   # everything below is "the agent"
+export CHANGEWARD_AGENT=replit-agent   # everything below is "the agent"
 
 step "1. The agent tries to clean up production during the freeze"
 run $CG plan --target prod "DELETE FROM executives"
-echo "→ Changegate shows exactly what would be deleted, and policy denies it (exit 3). Nothing ran."
+echo "→ Changeward shows exactly what would be deleted, and policy denies it (exit 3). Nothing ran."
 
 step "2. Same change with an incident reference: still not the agent's call"
 run $CG session start --target prod --agent replit-agent --incident INC-2025-0718
@@ -45,7 +45,7 @@ run $CG log
 psqlc -d saastr_dev -tA -c "SELECT 'executives table visible: ' || (to_regclass('public.executives') IS NOT NULL)"
 
 step "4. One command to rewind the whole session"
-unset CHANGEGATE_AGENT
+unset CHANGEWARD_AGENT
 run $CG rewind --yes
 psqlc -d saastr_dev -tA -c "SELECT 'executives: ' || count(*) FROM executives"
 

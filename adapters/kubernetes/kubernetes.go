@@ -1,4 +1,4 @@
-// Package kubernetes is the Changegate adapter for Kubernetes (§7.4).
+// Package kubernetes is the Changeward adapter for Kubernetes (§7.4).
 //
 // Operation kind "k8s". Payload is either YAML manifests (applied with
 // server-side apply), or a command line:
@@ -36,7 +36,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/srawlin/changegate/pkg/adapter"
+	"github.com/srawlin/changeward/pkg/adapter"
 	"gopkg.in/yaml.v3"
 )
 
@@ -304,7 +304,7 @@ func resourceVersion(o Obj) string {
 	return str(md["resourceVersion"])
 }
 
-// otherManagers lists field managers other than Changegate (ignoring
+// otherManagers lists field managers other than Changeward (ignoring
 // controllers that only write status).
 func otherManagers(o Obj) []string {
 	md, _ := o["metadata"].(map[string]any)
@@ -314,7 +314,7 @@ func otherManagers(o Obj) []string {
 	for _, e := range mf {
 		m, _ := e.(map[string]any)
 		name := str(m["manager"])
-		if name == "" || name == "changegate" || str(m["subresource"]) == "status" || seen[name] {
+		if name == "" || name == "changeward" || str(m["subresource"]) == "status" || seen[name] {
 			continue
 		}
 		seen[name] = true
@@ -471,7 +471,7 @@ func (a *Adapter) Plan(ctx context.Context, t adapter.Target, op adapter.Operati
 				return nil, err
 			}
 			manifest, _ := json.Marshal(o)
-			out, err := kubectl(ctx, t, manifest, "apply", "--server-side", "--force-conflicts", "--dry-run=server", "--field-manager=changegate", "-o", "json", "-f", "-")
+			out, err := kubectl(ctx, t, manifest, "apply", "--server-side", "--force-conflicts", "--dry-run=server", "--field-manager=changeward", "-o", "json", "-f", "-")
 			if err != nil {
 				return nil, fmt.Errorf("server-side dry run of %s: %w", r, err)
 			}
@@ -598,7 +598,7 @@ func (a *Adapter) Apply(ctx context.Context, t adapter.Target, p *adapter.Plan) 
 			uh.Steps = append(uh.Steps, undoStep{Ref: s.Ref, Prev: s.Prev, PostRV: "absent"})
 		default: // create, update, scale
 			manifest, _ := json.Marshal(s.Desire)
-			res, err := kubectl(ctx, t, manifest, "apply", "--server-side", "--force-conflicts", "--field-manager=changegate", "-o", "json", "-f", "-")
+			res, err := kubectl(ctx, t, manifest, "apply", "--server-side", "--force-conflicts", "--field-manager=changeward", "-o", "json", "-f", "-")
 			if err != nil {
 				return a.partial(ctx, t, p, uh, err)
 			}
@@ -657,7 +657,7 @@ func (a *Adapter) Undo(ctx context.Context, t adapter.Target, _ *adapter.Plan, r
 			}
 		case s.PostRV == "absent": // was deleted: re-create it
 			b, _ := json.Marshal(s.Prev)
-			if _, err := kubectl(ctx, t, b, "create", "--field-manager=changegate", "-f", "-"); err != nil {
+			if _, err := kubectl(ctx, t, b, "create", "--field-manager=changeward", "-f", "-"); err != nil {
 				return nil, err
 			}
 		default: // was updated: put the previous object back exactly
@@ -668,7 +668,7 @@ func (a *Adapter) Undo(ctx context.Context, t adapter.Target, _ *adapter.Plan, r
 			prev := strip(s.Prev)
 			prev["metadata"].(map[string]any)["resourceVersion"] = resourceVersion(live)
 			b, _ := json.Marshal(prev)
-			if _, err := kubectl(ctx, t, b, "replace", "--field-manager=changegate", "-f", "-"); err != nil {
+			if _, err := kubectl(ctx, t, b, "replace", "--field-manager=changeward", "-f", "-"); err != nil {
 				return nil, err
 			}
 		}

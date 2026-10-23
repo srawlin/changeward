@@ -16,13 +16,13 @@ import (
 	"net/http"
 	"strings"
 
-	"github.com/srawlin/changegate/internal/backend"
-	"github.com/srawlin/changegate/internal/engine"
-	"github.com/srawlin/changegate/internal/gitops"
-	"github.com/srawlin/changegate/internal/model"
-	"github.com/srawlin/changegate/internal/session"
-	"github.com/srawlin/changegate/internal/store"
-	"github.com/srawlin/changegate/pkg/adapter"
+	"github.com/srawlin/changeward/internal/backend"
+	"github.com/srawlin/changeward/internal/engine"
+	"github.com/srawlin/changeward/internal/gitops"
+	"github.com/srawlin/changeward/internal/model"
+	"github.com/srawlin/changeward/internal/session"
+	"github.com/srawlin/changeward/internal/store"
+	"github.com/srawlin/changeward/pkg/adapter"
 )
 
 // Roles.
@@ -52,7 +52,7 @@ func (t Token) has(role string) bool {
 func NewToken(name string, roles []string) (string, Token) {
 	b := make([]byte, 24)
 	_, _ = rand.Read(b)
-	tok := "cgx_" + hex.EncodeToString(b)
+	tok := "cwx_" + hex.EncodeToString(b)
 	sum := sha256.Sum256([]byte(tok))
 	return tok, Token{Name: name, SHA256: hex.EncodeToString(sum[:]), Roles: roles}
 }
@@ -70,9 +70,9 @@ func (s *Server) auth(next http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		h := r.Header.Get("Authorization")
 		tok := strings.TrimPrefix(h, "Bearer ")
-		if x := r.Header.Get("X-Changegate-Token"); x != "" {
+		if x := r.Header.Get("X-Changeward-Token"); x != "" {
 			// Gateways (Envoy ext_authz, agentgateway) forward the client's own
-			// Authorization header; they add Changegate's token here instead.
+			// Authorization header; they add Changeward's token here instead.
 			tok, h = x, ""
 		}
 		if tok == "" || tok == h {

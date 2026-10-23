@@ -11,19 +11,19 @@ import (
 
 	"github.com/jackc/pgx/v5"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
-	"github.com/srawlin/changegate/adapters/postgres"
-	"github.com/srawlin/changegate/internal/engine"
-	"github.com/srawlin/changegate/internal/mcpserver"
-	"github.com/srawlin/changegate/internal/model"
-	"github.com/srawlin/changegate/internal/policy"
-	"github.com/srawlin/changegate/internal/session"
-	"github.com/srawlin/changegate/internal/store"
-	"github.com/srawlin/changegate/pkg/adapter"
+	"github.com/srawlin/changeward/adapters/postgres"
+	"github.com/srawlin/changeward/internal/engine"
+	"github.com/srawlin/changeward/internal/mcpserver"
+	"github.com/srawlin/changeward/internal/model"
+	"github.com/srawlin/changeward/internal/policy"
+	"github.com/srawlin/changeward/internal/session"
+	"github.com/srawlin/changeward/internal/store"
+	"github.com/srawlin/changeward/pkg/adapter"
 )
 
-// TestMain doubles as a fake upstream MCP server when CG_FAKE_UPSTREAM is set.
+// TestMain doubles as a fake upstream MCP server when CW_FAKE_UPSTREAM is set.
 func TestMain(m *testing.M) {
-	if log := os.Getenv("CG_FAKE_UPSTREAM"); log != "" {
+	if log := os.Getenv("CW_FAKE_UPSTREAM"); log != "" {
 		fakeUpstream(log)
 		return
 	}
@@ -60,7 +60,7 @@ func fakeUpstream(logPath string) {
 }
 
 func TestProxy(t *testing.T) {
-	admin := os.Getenv("CG_TEST_PG18")
+	admin := os.Getenv("CW_TEST_PG18")
 	if admin == "" {
 		admin = "postgres://postgres:pg@localhost:55418/postgres?sslmode=disable"
 	}
@@ -69,7 +69,7 @@ func TestProxy(t *testing.T) {
 	if err != nil {
 		t.Skip("no Postgres 18 test server")
 	}
-	name := fmt.Sprintf("cgproxy_%d", time.Now().UnixNano())
+	name := fmt.Sprintf("cwproxy_%d", time.Now().UnixNano())
 	if _, err := c.Exec(ctx, "CREATE DATABASE "+name); err != nil {
 		t.Fatal(err)
 	}
@@ -83,8 +83,8 @@ func TestProxy(t *testing.T) {
 
 	dir := t.TempDir()
 	logPath := filepath.Join(dir, "upstream.log")
-	t.Setenv("CG_FAKE_UPSTREAM", logPath)
-	st, _ := store.OpenSQLite(filepath.Join(dir, "cg.db"))
+	t.Setenv("CW_FAKE_UPSTREAM", logPath)
+	st, _ := store.OpenSQLite(filepath.Join(dir, "cw.db"))
 	defer func() { _ = st.Close() }()
 	pg := postgres.New(postgres.Options{StateDir: dir})
 	defer pg.Close()
@@ -142,9 +142,9 @@ func TestProxy(t *testing.T) {
 	}
 	got := call("execute_sql", map[string]any{"sql": "UPDATE t SET v = 'z' WHERE id = 1"})
 	if !strings.Contains(got, "applied") || strings.Contains(upstreamLog(), "UPDATE") {
-		t.Fatalf("write must be applied by Changegate, not upstream: %s\nupstream: %s", got, upstreamLog())
+		t.Fatalf("write must be applied by Changeward, not upstream: %s\nupstream: %s", got, upstreamLog())
 	}
-	if got := call("changegate_undo_change", map[string]any{"change": "1"}); !strings.Contains(got, "undone") {
+	if got := call("changeward_undo_change", map[string]any{"change": "1"}); !strings.Contains(got, "undone") {
 		t.Fatalf("undo through proxy: %s", got)
 	}
 	if got := call("get_weather", map[string]any{}); got != "sunny" {

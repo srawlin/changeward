@@ -7,12 +7,12 @@ import (
 	"testing"
 	"time"
 
-	"github.com/srawlin/changegate/adapters/toykv"
-	"github.com/srawlin/changegate/internal/engine"
-	"github.com/srawlin/changegate/internal/model"
-	"github.com/srawlin/changegate/internal/policy"
-	"github.com/srawlin/changegate/internal/store"
-	"github.com/srawlin/changegate/pkg/adapter"
+	"github.com/srawlin/changeward/adapters/toykv"
+	"github.com/srawlin/changeward/internal/engine"
+	"github.com/srawlin/changeward/internal/model"
+	"github.com/srawlin/changeward/internal/policy"
+	"github.com/srawlin/changeward/internal/store"
+	"github.com/srawlin/changeward/pkg/adapter"
 )
 
 type fixture struct {
@@ -24,7 +24,7 @@ type fixture struct {
 func setup(t *testing.T) *fixture {
 	t.Helper()
 	dir := t.TempDir()
-	st, err := store.OpenSQLite(filepath.Join(dir, "cg.db"))
+	st, err := store.OpenSQLite(filepath.Join(dir, "cw.db"))
 	if err != nil {
 		t.Fatal(err)
 	}

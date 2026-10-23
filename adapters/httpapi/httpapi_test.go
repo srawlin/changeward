@@ -13,7 +13,7 @@ import (
 	"sync"
 	"testing"
 
-	"github.com/srawlin/changegate/pkg/adapter"
+	"github.com/srawlin/changeward/pkg/adapter"
 )
 
 // fakeTracker is an in-memory issues API.

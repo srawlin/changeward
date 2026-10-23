@@ -1,9 +1,9 @@
 {
-  "name": "changegate",
+  "name": "changeward",
   "version": "0.1.0",
   "description": "Let Claude change your database without fear: every write is previewed (exact rows, locks, reversibility), checked against policy, logged on a session timeline and undoable in one command.",
-  "author": { "name": "Changegate" },
-  "homepage": "https://github.com/srawlin/changegate",
+  "author": { "name": "Changeward" },
+  "homepage": "https://github.com/srawlin/changeward",
   "license": "Apache-2.0",
   "keywords": ["database", "postgres", "safety", "undo", "change-control", "mcp"]
 }

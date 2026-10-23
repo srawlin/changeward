@@ -11,14 +11,14 @@ import (
 	"testing"
 	"time"
 
-	"github.com/srawlin/changegate/conformance"
-	"github.com/srawlin/changegate/pkg/adapter"
+	"github.com/srawlin/changeward/conformance"
+	"github.com/srawlin/changeward/pkg/adapter"
 )
 
-// Tests need MySQL 8: $CG_TEST_MYSQL (root DSN), default the docker container
-// started by scripts/test-pg.sh (cg-mysql on :53306).
+// Tests need MySQL 8: $CW_TEST_MYSQL (root DSN), default the docker container
+// started by scripts/test-pg.sh (cw-mysql on :53306).
 func adminDSN() string {
-	if d := os.Getenv("CG_TEST_MYSQL"); d != "" {
+	if d := os.Getenv("CW_TEST_MYSQL"); d != "" {
 		return d
 	}
 	return "root:pg@tcp(127.0.0.1:53306)/"
@@ -40,7 +40,7 @@ func freshDB(t *testing.T) adapter.Target {
 	if err := root.PingContext(ctx); err != nil {
 		t.Skip("no MySQL test server: " + err.Error())
 	}
-	name := fmt.Sprintf("cgtest_%d", time.Now().UnixNano())
+	name := fmt.Sprintf("cwtest_%d", time.Now().UnixNano())
 	if _, err := root.ExecContext(ctx, "CREATE DATABASE "+name); err != nil {
 		t.Fatal(err)
 	}
@@ -82,7 +82,7 @@ func nullIf(b bool, s string) any {
 }
 
 func fp(t *testing.T, a *Adapter, tg adapter.Target) string {
-	p, err := a.Plan(context.Background(), tg, adapter.Operation{Kind: "changegate.fingerprint"})
+	p, err := a.Plan(context.Background(), tg, adapter.Operation{Kind: "changeward.fingerprint"})
 	if err != nil {
 		t.Fatal(err)
 	}

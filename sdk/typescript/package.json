@@ -1,7 +1,7 @@
 {
-  "name": "@changegate/sdk",
+  "name": "@changeward/sdk",
   "version": "0.1.0",
-  "description": "Changegate SDK: route your agent's changes through plan, policy, approval and undo.",
+  "description": "Changeward SDK: route your agent's changes through plan, policy, approval and undo.",
   "license": "Apache-2.0",
   "type": "module",
   "main": "dist/index.js",

@@ -1,6 +1,6 @@
 # Compensation manifests
 
-A compensation manifest tells Changegate's `httpapi` adapter how to undo REST calls: which request reads the
+A compensation manifest tells Changeward's `httpapi` adapter how to undo REST calls: which request reads the
 resource's state before a change, and which request reverses it. Calls without a matching entry are treated as
 irreversible, so policy can require approval for them.
 

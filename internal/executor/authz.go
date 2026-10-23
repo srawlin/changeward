@@ -8,11 +8,11 @@ import (
 	"path"
 	"strings"
 
-	"github.com/srawlin/changegate/adapters/mysql"
-	"github.com/srawlin/changegate/adapters/postgres"
-	"github.com/srawlin/changegate/internal/model"
-	"github.com/srawlin/changegate/internal/policy"
-	"github.com/srawlin/changegate/pkg/adapter"
+	"github.com/srawlin/changeward/adapters/mysql"
+	"github.com/srawlin/changeward/adapters/postgres"
+	"github.com/srawlin/changeward/internal/model"
+	"github.com/srawlin/changeward/internal/policy"
+	"github.com/srawlin/changeward/pkg/adapter"
 )
 
 // SQLTools are MCP tool names whose argument is SQL (popular database servers).
@@ -40,13 +40,13 @@ type rpcRequest struct {
 // authzMCP decides one forwarded MCP request (agentgateway extAuthz, Envoy
 // ext_authz HTTP, or any gateway that can call out). Headers:
 //
-//	x-changegate-server  logical name of the upstream MCP server (default "mcp")
-//	x-changegate-env     environment class of the upstream (default "prod")
-//	x-changegate-agent   agent identity, if the gateway knows it
-//	x-changegate-read-only-tools  comma-separated globs of tools that only read (allowed and audited)
+//	x-changeward-server  logical name of the upstream MCP server (default "mcp")
+//	x-changeward-env     environment class of the upstream (default "prod")
+//	x-changeward-agent   agent identity, if the gateway knows it
+//	x-changeward-read-only-tools  comma-separated globs of tools that only read (allowed and audited)
 func (s *Server) authzMCP(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
-		w.Header().Set("x-changegate-decision", "allow")
+		w.Header().Set("x-changeward-decision", "allow")
 		writeJSON(w, http.StatusOK, AuthzDecision{Allow: true, Reason: "not a tool call"})
 		return
 	}
@@ -60,9 +60,9 @@ func (s *Server) authzMCP(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusOK, AuthzDecision{Allow: true, Reason: "not a tool call"})
 		return
 	}
-	d := s.decideTool(r, header(r, "x-changegate-server", "mcp"), header(r, "x-changegate-env", adapter.EnvProd),
-		header(r, "x-changegate-agent", "agent:via-gateway"), req.Params.Name, req.Params.Arguments)
-	w.Header().Set("x-changegate-decision", map[bool]string{true: "allow", false: "deny"}[d.Allow])
+	d := s.decideTool(r, header(r, "x-changeward-server", "mcp"), header(r, "x-changeward-env", adapter.EnvProd),
+		header(r, "x-changeward-agent", "agent:via-gateway"), req.Params.Name, req.Params.Arguments)
+	w.Header().Set("x-changeward-decision", map[bool]string{true: "allow", false: "deny"}[d.Allow])
 	if d.Allow {
 		writeJSON(w, http.StatusOK, d)
 		return
@@ -70,7 +70,7 @@ func (s *Server) authzMCP(w http.ResponseWriter, r *http.Request) {
 	// Gateways relay a denial's body to the MCP client, so it is also a
 	// JSON-RPC error for the call: the agent sees why it was blocked.
 	writeJSON(w, http.StatusForbidden, rpcDenial{JSONRPC: "2.0", ID: req.ID,
-		Error: rpcError{Code: -32001, Message: "Changegate: " + d.Reason, Data: d}, AuthzDecision: d})
+		Error: rpcError{Code: -32001, Message: "Changeward: " + d.Reason, Data: d}, AuthzDecision: d})
 }
 
 type rpcError struct {
@@ -151,11 +151,11 @@ func (s *Server) decideTool(r *http.Request, server, env, agent, tool string, ar
 			if readOnly {
 				return AuthzDecision{Allow: true, Reason: "read-only SQL"}
 			}
-			return AuthzDecision{Reason: "SQL writes must go through Changegate (propose_change → apply_change) for a preview, policy check and undo; this direct call was blocked"}
+			return AuthzDecision{Reason: "SQL writes must go through Changeward (propose_change → apply_change) for a preview, policy check and undo; this direct call was blocked"}
 		}
 	}
 	argsJSON, _ := json.Marshal(args)
-	if readOnlyTool(r.Header.Get("x-changegate-read-only-tools"), tool) {
+	if readOnlyTool(r.Header.Get("x-changeward-read-only-tools"), tool) {
 		_ = s.Engine.Store.AppendEvent(r.Context(), &model.Event{Type: "gateway.read", Actor: agent,
 			Reason: fmt.Sprintf("%s on %s (%s): declared read-only by the gateway", tool, server, env), Data: argsJSON})
 		return AuthzDecision{Allow: true, Reason: "read-only tool"}
@@ -179,7 +179,7 @@ func (s *Server) decideTool(r *http.Request, server, env, agent, tool string, ar
 }
 
 // readOnlyTool matches tool against the gateway operator's comma-separated
-// glob list (x-changegate-read-only-tools, e.g. "echo,get-*,list_*"). The
+// glob list (x-changeward-read-only-tools, e.g. "echo,get-*,list_*"). The
 // gateway sets this header itself; it must not forward a client's copy.
 func readOnlyTool(globs, tool string) bool {
 	for _, g := range strings.Split(globs, ",") {

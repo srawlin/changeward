@@ -9,7 +9,7 @@ import (
 
 	"github.com/hashicorp/go-hclog"
 	"github.com/hashicorp/go-plugin"
-	pb "github.com/srawlin/changegate/gen/changegate/v1"
+	pb "github.com/srawlin/changeward/gen/changeward/v1"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
@@ -18,8 +18,8 @@ import (
 // Handshake is shared by the executor and every adapter plugin binary.
 var Handshake = plugin.HandshakeConfig{
 	ProtocolVersion:  1,
-	MagicCookieKey:   "CHANGEGATE_ADAPTER_PLUGIN",
-	MagicCookieValue: "8c1b2f0e-changegate-adapter-v1",
+	MagicCookieKey:   "CHANGEWARD_ADAPTER_PLUGIN",
+	MagicCookieValue: "8c1b2f0e-changeward-adapter-v1",
 }
 
 const pluginName = "adapter"
@@ -80,7 +80,7 @@ func (p *grpcPlugin) GRPCClient(_ context.Context, _ *plugin.GRPCBroker, c *grpc
 	return &grpcClient{c: pb.NewAdapterClient(c)}, nil
 }
 
-const conflictPrefix = "changegate-conflict:"
+const conflictPrefix = "changeward-conflict:"
 
 func toStatus(err error) error {
 	if err == nil {

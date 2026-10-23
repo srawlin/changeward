@@ -11,7 +11,7 @@ import (
 	"os"
 	"time"
 
-	"github.com/srawlin/changegate/pkg/adapter"
+	"github.com/srawlin/changeward/pkg/adapter"
 )
 
 // Neon branching (https://api-docs.neon.tech). Target options:
@@ -122,7 +122,7 @@ func (a *Adapter) neonCheckpoint(ctx context.Context, t adapter.Target, label st
 		}
 		return checkpointData{Strategy: StrategyNeon, Neon: &neonRef{ProjectID: t.Config["neon_project_id"], BranchID: branch, LSN: lsn}}, nil
 	}
-	name := "changegate-cp-" + time.Now().UTC().Format("20060102-150405")
+	name := "changeward-cp-" + time.Now().UTC().Format("20060102-150405")
 	if label != "" {
 		name += "-" + label
 	}
@@ -149,7 +149,7 @@ func (a *Adapter) neonRestore(ctx context.Context, t adapter.Target, ref *neonRe
 	// to its own history; for branch checkpoints it is optional.
 	preserve := ""
 	if ref.LSN != "" || t.Config["neon_preserve_on_restore"] != "false" {
-		preserve = "changegate-pre-restore-" + time.Now().UTC().Format("20060102-150405")
+		preserve = "changeward-pre-restore-" + time.Now().UTC().Format("20060102-150405")
 		body["preserve_under_name"] = preserve
 	}
 	return preserve, neonDo(ctx, t, http.MethodPost, fmt.Sprintf("/projects/%s/branches/%s/restore", ref.ProjectID, target), body, nil)
@@ -164,7 +164,7 @@ func (a *Adapter) neonDeleteBranch(ctx context.Context, t adapter.Target, ref *n
 
 func (a *Adapter) neonBranch(ctx context.Context, t adapter.Target, name string) (*adapter.CopyRef, error) {
 	if name == "" {
-		name = "changegate-" + time.Now().UTC().Format("20060102-150405")
+		name = "changeward-" + time.Now().UTC().Format("20060102-150405")
 	}
 	out, err := a.neonCreate(ctx, t, name, true)
 	if err != nil {

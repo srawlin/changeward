@@ -1,27 +1,27 @@
 # GitHub Actions
 
-The Changegate Action rehearses the database migrations a pull request adds, on a throwaway Postgres:
+The Changeward Action rehearses the database migrations a pull request adds, on a throwaway Postgres:
 
 1. Replay the base branch's migrations, optionally with synthetic data.
 2. Run each new migration forward, and observe the locks, table rewrites and rows touched.
 3. Run its down migration.
 4. Compare catalog and data checksums with the state before.
 
-It then posts the effect report on the PR, sets a `changegate/rehearsal` commit status, and applies your policy.
+It then posts the effect report on the PR, sets a `changeward/rehearsal` commit status, and applies your policy.
 
-**Verified on GitHub** (srawlin/changegate):
+**Verified on GitHub** (srawlin/changeward):
 
 - PR #1 is an agent's migration that drops a column. The report flagged it irreversible and asked for code-owner
   review; the status was pending.
-- PR #2 was opened by `changegate promote --pr` from an agent session. It was rehearsed as reversible and
+- PR #2 was opened by `changeward promote --pr` from an agent session. It was rehearsed as reversible and
   auto-approved.
 
 ## Rehearse migrations on every PR
 
-`.github/workflows/changegate.yml`:
+`.github/workflows/changeward.yml`:
 
 ```yaml
-name: changegate
+name: changeward
 on:
   pull_request:
   pull_request_review:            # an approval can satisfy "review required"
@@ -29,23 +29,23 @@ on:
 permissions:
   contents: read
   pull-requests: write            # report comment, read approvals
-  statuses: write                 # changegate/rehearsal status
+  statuses: write                 # changeward/rehearsal status
 jobs:
   rehearse:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
         with: { fetch-depth: 0 }  # needed to diff against the base branch
-      - id: changegate
-        uses: srawlin/changegate/integrations/github-action@main   # pin a release tag once published
+      - id: changeward
+        uses: srawlin/changeward/integrations/github-action@main   # pin a release tag once published
         with:
           mode: report            # start here; switch to gate when you trust it
           synthetic-rows: 1000    # T1 rehearsal; 0 = schema only (T0)
-      - run: echo "decision=${{ steps.changegate.outputs.decision }}"
+      - run: echo "decision=${{ steps.changeward.outputs.decision }}"
 ```
 
-Until the first release is published, add `version: source` to build Changegate in the job. That works once
-the repository is public; while it's private, vendor the Action and use `version: local`. Changegate's own
+Until the first release is published, add `version: source` to build Changeward in the job. That works once
+the repository is public; while it's private, vendor the Action and use `version: local`. Changeward's own
 self-test builds the checked-out repository with `version: local`.
 
 The Action starts `postgres:<postgres-version>-alpine` in Docker on the runner, unless you pass `database-url`.
@@ -61,7 +61,7 @@ The Action starts `postgres:<postgres-version>-alpine` in Docker on the runner, 
 | `base-ref` | PR base | Migrations changed since this ref are rehearsed |
 | `database-url` | — | Admin DSN of a scratch server (CREATE DATABASE allowed). Use it for T2/T3 on a self-hosted runner next to a masked golden image. |
 | `postgres-version` | `18` | When the Action starts Postgres |
-| `policy` | `changegate.policy.yaml` if present | Policy file |
+| `policy` | `changeward.policy.yaml` if present | Policy file |
 | `up-cmd`, `down-cmd` | — | Rails, Django, Alembic: e.g. `bin/rails db:migrate` / `bin/rails db:rollback STEP={n}` |
 | `comment` | `true` | Post or update the PR comment (one comment, updated in place) |
 | `version` | `latest` | Release tag, `latest`, `source` or `local` |
@@ -81,7 +81,7 @@ Outputs:
 ## What the report shows
 
 ```
-## ❌ Changegate rehearsal: 1 migration(s) · not proven reversible (irreversible)
+## ❌ Changeward rehearsal: 1 migration(s) · not proven reversible (irreversible)
 Rehearsed on T1 · synthetic data · Postgres 18 · golang-migrate `db/migrations` · 1 base migration(s) replayed
 Provenance: agent-authored (claude-code)
 Policy (prod): 👀 review required by owner:codeowners: change is destructive, not proven reversible, or failed rehearsal
@@ -96,13 +96,13 @@ Policy (prod): 👀 review required by owner:codeowners: change is destructive, 
 The report contains counts, checksums and lint findings. It never contains row values.
 
 **Provenance:** commits from agents are detected from bot authors, `Co-Authored-By` trailers and branch names
-(`changegate detect`), so policy can treat agent PRs more strictly.
+(`changeward detect`), so policy can treat agent PRs more strictly.
 
 ## Making it a merge gate
 
 1. Run in `mode: report` for a while and read the reports.
 2. Switch to `mode: gate`, or keep `report` and rely on the status.
-3. In branch protection (or a ruleset), **require the `changegate/rehearsal` status**.
+3. In branch protection (or a ruleset), **require the `changeward/rehearsal` status**.
 4. For `owner:codeowners` approvers, add a `CODEOWNERS` entry for your migrations directory and enable
    **Require review from Code Owners**.
 
@@ -124,14 +124,14 @@ Then:
       - uses: actions/checkout@v4
       - uses: hashicorp/setup-terraform@v3
       - run: terraform init -input=false && terraform plan -out tf.plan -input=false && terraform show -json tf.plan > plan.json
-      - run: changegate tf review --plan-json plan.json --env prod --github   # 0 ok, 2 review, 3 denied
+      - run: changeward tf review --plan-json plan.json --env prod --github   # 0 ok, 2 review, 3 denied
         env: { GITHUB_TOKEN: "${{ github.token }}" }
 ```
 
-See [terraform.md](terraform.md) and [kubernetes-gitops.md](kubernetes-gitops.md) for `changegate k8s gate`.
+See [terraform.md](terraform.md) and [kubernetes-gitops.md](kubernetes-gitops.md) for `changeward k8s gate`.
 
 ## From an agent session to a PR
 
-When an agent changed a dev database directly, run `changegate promote --pr` (needs `git` and `gh`). It writes
+When an agent changed a dev database directly, run `changeward promote --pr` (needs `git` and `gh`). It writes
 migration files for your framework, with the down generated from the recorded undo data, then opens a PR with
 the session timeline. This workflow then rehearses it like any other PR.

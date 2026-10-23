@@ -13,7 +13,7 @@ import (
 )
 
 // TrashSchema holds soft-dropped objects until they are purged.
-const TrashSchema = "_changegate_trash"
+const TrashSchema = "_changeward_trash"
 
 // userSchemaFilter excludes system schemas and the trash schema.
 const userSchemaFilter = `n.nspname NOT IN ('pg_catalog','information_schema','pg_toast','` + TrashSchema + `')
@@ -490,7 +490,7 @@ func diffCatalog(before, after *catalogObjects) catalogDiff {
 }
 
 // TrashPrefix starts the names of soft-dropped objects and columns.
-const TrashPrefix = "_cg_"
+const TrashPrefix = "_cw_"
 
 func isTrashName(n string) bool { return strings.HasPrefix(n, TrashPrefix) }
 
@@ -583,7 +583,7 @@ func softDropRelSQL(r relRef, trash string) []string {
 	prefix := strings.TrimSuffix(trash, r.Name)
 	return []string{
 		"CREATE SCHEMA IF NOT EXISTS " + QuoteIdent(TrashSchema),
-		fmt.Sprintf(`DO $cg$ DECLARE x record; BEGIN
+		fmt.Sprintf(`DO $cw$ DECLARE x record; BEGIN
   FOR x IN SELECT c.relname, c.relkind FROM pg_class c WHERE c.oid IN (
       SELECT indexrelid FROM pg_index WHERE indrelid = %[1]s::regclass
       UNION SELECT d.objid FROM pg_depend d JOIN pg_class s ON s.oid = d.objid AND s.relkind = 'S'
@@ -591,7 +591,7 @@ func softDropRelSQL(r relRef, trash string) []string {
   LOOP
     EXECUTE format('ALTER %%s %%I.%%I RENAME TO %%I', CASE WHEN x.relkind = 'S' THEN 'SEQUENCE' ELSE 'INDEX' END,
       %[2]s, x.relname, left(%[3]s || x.relname, 63));
-  END LOOP; END $cg$`, QuoteLiteral(r.qualified()), QuoteLiteral(r.Schema), QuoteLiteral(prefix)),
+  END LOOP; END $cw$`, QuoteLiteral(r.qualified()), QuoteLiteral(r.Schema), QuoteLiteral(prefix)),
 		fmt.Sprintf("ALTER %s %s RENAME TO %s", kw, r.qualified(), QuoteIdent(trash)),
 		fmt.Sprintf("ALTER %s %s.%s SET SCHEMA %s", kw, QuoteIdent(r.Schema), QuoteIdent(trash), QuoteIdent(TrashSchema)),
 	}

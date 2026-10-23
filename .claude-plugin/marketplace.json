@@ -1,9 +1,9 @@
 {
-  "name": "changegate",
-  "owner": { "name": "Changegate" },
+  "name": "changeward",
+  "owner": { "name": "Changeward" },
   "plugins": [
     {
-      "name": "changegate",
+      "name": "changeward",
       "source": "./integrations/claude-code",
       "description": "Preview, approve, log and undo every database change Claude makes."
     }

@@ -34,7 +34,7 @@ Commands accept any of them.
 | | Direct lane | CI lane |
 | --- | --- | --- |
 | Who | An agent (or a person) acting on a live system | A pull request |
-| Entry points | MCP server, `changegate exec`, hooks, SDKs, executor, gateways | `rehearse` + `gate`, `tf review`, `k8s gate`, GitHub Action, GitLab component |
+| Entry points | MCP server, `changeward exec`, hooks, SDKs, executor, gateways | `rehearse` + `gate`, `tf review`, `k8s gate`, GitHub Action, GitLab component |
 | Evidence | A live dry run against the target | A rehearsal on a throwaway copy, or a dry run against the cluster |
 | Result | Applied and undoable, on a session timeline | A PR comment, a commit status, a merge or deploy gate |
 
@@ -42,13 +42,13 @@ The same policy file governs both; rules can check `change.lane`.
 
 ### Promotion
 
-Direct changes in dev shouldn't stay only in dev. `changegate promote` turns a session's applied changes into
+Direct changes in dev shouldn't stay only in dev. `changeward promote` turns a session's applied changes into
 migration files for your framework. The *up* is the SQL as run. The *down* is generated from the recorded undo
 data, so the rollback is one that was actually exercised.
 
 With `--pr`, it opens a pull request carrying the session timeline, and the CI lane then rehearses it.
 Kubernetes changes are promoted to manifests (`--k8s-dir`). For changes made directly to Git-managed systems
-during an incident, `changegate reconcile` opens the matching PR. `changegate drift` reports any that are still
+during an incident, `changeward reconcile` opens the matching PR. `changeward drift` reports any that are still
 unreconciled.
 
 ## Environment classes
@@ -80,17 +80,17 @@ Policy sees the class, so "irreversible in prod" can be denied or sent to a DBA.
 ## Sessions
 
 A session groups an agent's work on one target, with who (agent and delegating human), when, and why
-(`--incident`). The MCP server starts one automatically. On the command line, use `changegate session start`.
+(`--incident`). The MCP server starts one automatically. On the command line, use `changeward session start`.
 
-- `changegate log`: the timeline.
-- `changegate undo STEP`: undo a step. Later steps that touched the same objects are undone first, or listed if
+- `changeward log`: the timeline.
+- `changeward undo STEP`: undo a step. Later steps that touched the same objects are undone first, or listed if
   you don't pass `--yes`.
-- `changegate rewind`: undo the whole session, newest first.
+- `changeward rewind`: undo the whole session, newest first.
 
 ## Checkpoints
 
 Checkpoints make `checkpoint-only` changes safe. They are taken with `session start --checkpoint`,
-`changegate checkpoint`, or the agent's `checkpoint` tool, and restored with `changegate restore`.
+`changeward checkpoint`, or the agent's `checkpoint` tool, and restored with `changeward restore`.
 
 | Postgres strategy | How |
 | --- | --- |
@@ -98,35 +98,35 @@ Checkpoints make `checkpoint-only` changes safe. They are taken with `session st
 | `dump` | `pg_dump` / `pg_restore` |
 | Neon | A branch at the current LSN (`neon_project_id`, `neon_api_key`); restore keeps an ancestor branch |
 
-`changegate branch create` points a session at a private copy of the target (a Neon branch, or a template copy)
-so an agent can experiment freely. `changegate branch discard` throws the copy away.
+`changeward branch create` points a session at a private copy of the target (a Neon branch, or a template copy)
+so an agent can experiment freely. `changeward branch discard` throws the copy away.
 
 ## Approvals
 
 - **Inline:** confirmed by the delegating human in the agent's own UI, through MCP elicitation. Allowed only
   where policy says `channel: inline` (personal and shared-dev defaults).
-- **Out of band:** `changegate approve PLAN_ID`, with `--executor` on a shared executor, Slack buttons through
-  `changegate serve`, or the web view. The approver must be someone other than the proposer.
+- **Out of band:** `changeward approve PLAN_ID`, with `--executor` on a shared executor, Slack buttons through
+  `changeward serve`, or the web view. The approver must be someone other than the proposer.
 - An approval binds to the **plan hash**. If the data or the change moves after approval, the change must be
   planned again and approved again.
-- Agents can't approve. The hooks block `changegate approve` from agent shells, and the executor's roles keep
+- Agents can't approve. The hooks block `changeward approve` from agent shells, and the executor's roles keep
   `propose` and `approve` separate.
 
 ## Changesets
 
-`changegate changeset plan -f changes.yaml` plans ordered steps across systems, for example a migration and a
+`changeward changeset plan -f changes.yaml` plans ordered steps across systems, for example a migration and a
 Kubernetes rollout. `changeset apply` runs them as a saga: if a step fails, the earlier steps are undone in
 reverse order. `changeset undo` reverts the whole set.
 
 ## Audit log
 
 Every event goes to an append-only, hash-chained log: proposals, plans, decisions, approvals, applies, undos,
-blocked hook attempts and gateway decisions. `changegate audit verify` checks the chain.
+blocked hook attempts and gateway decisions. `changeward audit verify` checks the chain.
 
 With `telemetry.otlp_endpoint` set, each change is also exported as an OpenTelemetry trace, with a span per
 state. Attributes only, never row values.
 
-## What Changegate never does
+## What Changeward never does
 
 - It never sends row values anywhere. Plans shown to agents redact `sensitive` columns, and production plans hide
   values. CI reports contain counts and checksums only.

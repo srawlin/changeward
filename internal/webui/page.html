@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Changegate</title>
+<title>Changeward</title>
 <style>
 :root { --bg:#fbfbfa; --fg:#1d1d1b; --muted:#6b6b66; --line:#e4e3de; --card:#fff; --ok:#1f7a4d; --bad:#b3261e; --wait:#9a6700; --accent:#2f5bd3; }
 @media (prefers-color-scheme: dark) { :root { --bg:#161615; --fg:#ecebe6; --muted:#9b9a94; --line:#2c2c29; --card:#1e1e1c; --ok:#5cc28f; --bad:#ff8a80; --wait:#e3b341; --accent:#8aa9ff; } }
@@ -31,7 +31,7 @@ table { border-collapse: collapse; width:100%; } td { padding:4px 6px; border-bo
 </style>
 </head>
 <body>
-<header><b>Changegate</b><span>local sessions and changes</span></header>
+<header><b>Changeward</b><span>local sessions and changes</span></header>
 <div class="wrap">
 <nav>
   {{range .Sessions}}<a href="/sessions/{{.ID}}">{{.ID}}<br><small>{{.Target}} · {{.Env}}{{if .EndedAt}} · ended{{end}}</small></a>{{else}}<small>No sessions yet.</small>{{end}}

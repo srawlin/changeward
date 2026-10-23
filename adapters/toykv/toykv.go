@@ -21,7 +21,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/srawlin/changegate/pkg/adapter"
+	"github.com/srawlin/changeward/pkg/adapter"
 )
 
 // Adapter implements adapter.Adapter for toy KV files.
@@ -135,10 +135,10 @@ func (a *Adapter) Classify(_ context.Context, _ adapter.Target, o adapter.Operat
 func (a *Adapter) Plan(ctx context.Context, t adapter.Target, o adapter.Operation) (*adapter.Plan, error) {
 	a.mu.Lock()
 	defer a.mu.Unlock()
-	if o.Kind == "changegate.fingerprint" {
+	if o.Kind == "changeward.fingerprint" {
 		return a.fingerprint(t)
 	}
-	if o.Kind == "changegate.corpus" {
+	if o.Kind == "changeward.corpus" {
 		return corpus(o)
 	}
 	p, err := parse(o)
@@ -268,7 +268,7 @@ func (a *Adapter) Restore(_ context.Context, t adapter.Target, cp *adapter.Check
 }
 
 // fingerprint implements the conformance convention: a Plan of kind
-// "changegate.fingerprint" returns facts["fingerprint"], a hash of state.
+// "changeward.fingerprint" returns facts["fingerprint"], a hash of state.
 func (a *Adapter) fingerprint(t adapter.Target) (*adapter.Plan, error) {
 	m, err := load(t)
 	if err != nil {
@@ -287,7 +287,7 @@ func (a *Adapter) fingerprint(t adapter.Target) (*adapter.Plan, error) {
 }
 
 // corpus implements the conformance convention: a Plan of kind
-// "changegate.corpus" with params seed and n returns facts["corpus"], a JSON
+// "changeward.corpus" with params seed and n returns facts["corpus"], a JSON
 // list of generated operations.
 func corpus(o adapter.Operation) (*adapter.Plan, error) {
 	var seed, n int64 = 1, 20

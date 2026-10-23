@@ -11,16 +11,16 @@ import (
 
 	"github.com/jackc/pgx/v5"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
-	"github.com/srawlin/changegate/adapters/postgres"
-	"github.com/srawlin/changegate/internal/engine"
-	"github.com/srawlin/changegate/internal/policy"
-	"github.com/srawlin/changegate/internal/session"
-	"github.com/srawlin/changegate/internal/store"
-	"github.com/srawlin/changegate/pkg/adapter"
+	"github.com/srawlin/changeward/adapters/postgres"
+	"github.com/srawlin/changeward/internal/engine"
+	"github.com/srawlin/changeward/internal/policy"
+	"github.com/srawlin/changeward/internal/session"
+	"github.com/srawlin/changeward/internal/store"
+	"github.com/srawlin/changeward/pkg/adapter"
 )
 
 func testDB(t *testing.T) string {
-	admin := os.Getenv("CG_TEST_PG18")
+	admin := os.Getenv("CW_TEST_PG18")
 	if admin == "" {
 		admin = "postgres://postgres:pg@localhost:55418/postgres?sslmode=disable"
 	}
@@ -29,7 +29,7 @@ func testDB(t *testing.T) string {
 	if err != nil {
 		t.Skip("no Postgres 18 test server")
 	}
-	name := fmt.Sprintf("cgmcp_%d", time.Now().UnixNano())
+	name := fmt.Sprintf("cwmcp_%d", time.Now().UnixNano())
 	if _, err := c.Exec(ctx, "CREATE DATABASE "+name); err != nil {
 		t.Fatal(err)
 	}
@@ -60,7 +60,7 @@ func setup(t *testing.T, env string) *harness {
 	t.Helper()
 	dsn := testDB(t)
 	dir := t.TempDir()
-	st, err := store.OpenSQLite(filepath.Join(dir, "cg.db"))
+	st, err := store.OpenSQLite(filepath.Join(dir, "cw.db"))
 	if err != nil {
 		t.Fatal(err)
 	}

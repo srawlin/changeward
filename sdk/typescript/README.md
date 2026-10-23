@@ -1,13 +1,13 @@
-# @changegate/sdk (TypeScript)
+# @changeward/sdk (TypeScript)
 
-Route your agent's changes through a Changegate executor: plan (exact preview), policy, approval, apply, undo.
+Route your agent's changes through a Changeward executor: plan (exact preview), policy, approval, apply, undo.
 No runtime dependencies (uses `fetch`).
 
 ```ts
-import { Client, PendingApproval, guarded, proposeAndApplyText } from "@changegate/sdk";
+import { Client, PendingApproval, guarded, proposeAndApplyText } from "@changeward/sdk";
 
-const cg = new Client({ url: "http://127.0.0.1:8443", token: process.env.CHANGEGATE_EXECUTOR_TOKEN });
-const session = await cg.startSession({ target: "app", agent: "refund-bot" });
+const cw = new Client({ url: "http://127.0.0.1:8443", token: process.env.CHANGEWARD_EXECUTOR_TOKEN });
+const session = await cw.startSession({ target: "app", agent: "refund-bot" });
 
 const change = await session.propose("UPDATE orders SET status = 'refunded' WHERE id = 42", { intent: "refund order 42" });
 console.log(change.diff, change.reversibility, change.decision);

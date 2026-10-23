@@ -24,11 +24,11 @@ func TestEvaluate(t *testing.T) {
 		{`cat x.sql | psql -d appdb`, "deny"},
 		{`psql -d appdb`, "ask"},
 		{`echo hi && psql -d appdb -c "TRUNCATE t"`, "deny"},
-		{`changegate exec "DELETE FROM t WHERE id = 1"`, "allow"},
-		{`changegate approve p_123`, "deny"},
-		{`CHANGEGATE_USER=bob changegate approve p_123 --as bob`, "deny"},
-		{`changegate policy init`, "deny"},
-		{`changegate trash purge --yes`, "deny"},
+		{`changeward exec "DELETE FROM t WHERE id = 1"`, "allow"},
+		{`changeward approve p_123`, "deny"},
+		{`CHANGEWARD_USER=bob changeward approve p_123 --as bob`, "deny"},
+		{`changeward policy init`, "deny"},
+		{`changeward trash purge --yes`, "deny"},
 		{`kubectl get pods`, "allow"},
 		{`kubectl delete pod x`, "ask"},
 		{`terraform apply -auto-approve`, "ask"},
@@ -47,6 +47,6 @@ func TestEvaluate(t *testing.T) {
 		}
 	}
 	if got := Evaluate(`psql -c "DELETE FROM t"`, nil); got.Permission != "allow" {
-		t.Error("no registered targets: psql is not Changegate's business")
+		t.Error("no registered targets: psql is not Changeward's business")
 	}
 }

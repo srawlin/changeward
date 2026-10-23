@@ -6,9 +6,9 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/srawlin/changegate/adapters/toykv"
-	"github.com/srawlin/changegate/conformance"
-	"github.com/srawlin/changegate/pkg/adapter"
+	"github.com/srawlin/changeward/adapters/toykv"
+	"github.com/srawlin/changeward/conformance"
+	"github.com/srawlin/changeward/pkg/adapter"
 )
 
 func newTarget(t *testing.T) func(context.Context) (adapter.Target, func(), error) {
@@ -33,8 +33,8 @@ func TestConformanceOverPlugin(t *testing.T) {
 	if testing.Short() {
 		t.Skip("builds a plugin binary")
 	}
-	bin := filepath.Join(t.TempDir(), "changegate-adapter-toykv")
-	out, err := exec.Command("go", "build", "-o", bin, "./cmd/changegate-adapter-toykv").CombinedOutput()
+	bin := filepath.Join(t.TempDir(), "changeward-adapter-toykv")
+	out, err := exec.Command("go", "build", "-o", bin, "./cmd/changeward-adapter-toykv").CombinedOutput()
 	if err != nil {
 		t.Fatalf("build: %v\n%s", err, out)
 	}

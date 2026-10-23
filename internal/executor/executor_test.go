@@ -8,20 +8,20 @@ import (
 	"testing"
 	"time"
 
-	"github.com/srawlin/changegate/adapters/toykv"
-	"github.com/srawlin/changegate/internal/backend"
-	"github.com/srawlin/changegate/internal/engine"
-	"github.com/srawlin/changegate/internal/model"
-	"github.com/srawlin/changegate/internal/policy"
-	"github.com/srawlin/changegate/internal/session"
-	"github.com/srawlin/changegate/internal/store"
-	"github.com/srawlin/changegate/pkg/adapter"
+	"github.com/srawlin/changeward/adapters/toykv"
+	"github.com/srawlin/changeward/internal/backend"
+	"github.com/srawlin/changeward/internal/engine"
+	"github.com/srawlin/changeward/internal/model"
+	"github.com/srawlin/changeward/internal/policy"
+	"github.com/srawlin/changeward/internal/session"
+	"github.com/srawlin/changeward/internal/store"
+	"github.com/srawlin/changeward/pkg/adapter"
 )
 
 func TestExecutor(t *testing.T) {
 	ctx := context.Background()
 	dir := t.TempDir()
-	st, _ := store.OpenSQLite(filepath.Join(dir, "cg.db"))
+	st, _ := store.OpenSQLite(filepath.Join(dir, "cw.db"))
 	defer func() { _ = st.Close() }()
 	pol, _ := policy.New(nil)
 	eng := &engine.Engine{Store: st, Adapters: engine.MapRegistry{"toykv": toykv.New()}, Policy: pol}
@@ -35,7 +35,7 @@ func TestExecutor(t *testing.T) {
 	srv := httptest.NewServer((&Server{Engine: eng, Sessions: svc, Tokens: []Token{alice, bob}}).Handler())
 	defer srv.Close()
 
-	if _, err := NewClient(srv.URL, "cgx_bogus").StartSession(ctx, backend.StartRequest{Target: "dev"}); err == nil {
+	if _, err := NewClient(srv.URL, "cwx_bogus").StartSession(ctx, backend.StartRequest{Target: "dev"}); err == nil {
 		t.Fatal("bad token accepted")
 	}
 	a := NewClient(srv.URL, aliceTok)

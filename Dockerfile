@@ -7,11 +7,11 @@ COPY go.mod go.sum ./
 RUN go mod download
 COPY . .
 ARG VERSION=dev
-RUN CGO_ENABLED=1 go build -trimpath -ldflags "-s -w -X main.version=${VERSION}" -o /out/changegate ./cmd/changegate
+RUN CGO_ENABLED=1 go build -trimpath -ldflags "-s -w -X main.version=${VERSION}" -o /out/changeward ./cmd/changeward
 
 FROM alpine:3.20
-RUN apk add --no-cache ca-certificates git kubectl && adduser -D -u 10001 changegate
-COPY --from=build /out/changegate /usr/local/bin/changegate
-USER changegate
+RUN apk add --no-cache ca-certificates git kubectl && adduser -D -u 10001 changeward
+COPY --from=build /out/changeward /usr/local/bin/changeward
+USER changeward
 WORKDIR /work
-ENTRYPOINT ["changegate"]
+ENTRYPOINT ["changeward"]

@@ -1,4 +1,4 @@
-// Package mysql is the Changegate adapter for MySQL 8 (InnoDB).
+// Package mysql is the Changeward adapter for MySQL 8 (InnoDB).
 //
 // DML is planned in a transaction that is always rolled back: target rows
 // are pre-selected FOR UPDATE by the statement's own WHERE/ORDER BY/LIMIT,
@@ -9,7 +9,7 @@
 //
 // MySQL DDL commits implicitly and cannot be dry-run, so DDL plans are
 // static (validated against information_schema). DROP TABLE and TRUNCATE
-// are soft (renamed or copied into the _changegate_trash database), DROP
+// are soft (renamed or copied into the _changeward_trash database), DROP
 // COLUMN is a soft rename restored exactly from SHOW CREATE TABLE.
 package mysql
 
@@ -28,11 +28,11 @@ import (
 
 	mysqldrv "github.com/go-sql-driver/mysql"
 	"github.com/pingcap/tidb/pkg/parser/ast"
-	"github.com/srawlin/changegate/pkg/adapter"
+	"github.com/srawlin/changeward/pkg/adapter"
 )
 
 // TrashDB holds soft-dropped tables.
-const TrashDB = "_changegate_trash"
+const TrashDB = "_changeward_trash"
 
 // Adapter implements adapter.Adapter for MySQL.
 type Adapter struct {
@@ -525,7 +525,7 @@ func autoIncRe(ddl string) string {
 
 // Plan implements adapter.Adapter.
 func (a *Adapter) Plan(ctx context.Context, t adapter.Target, op adapter.Operation) (*adapter.Plan, error) {
-	if op.Kind == "changegate.fingerprint" {
+	if op.Kind == "changeward.fingerprint" {
 		return a.fingerprint(ctx, t)
 	}
 	cls, stmts, err := Classify(op.Payload)

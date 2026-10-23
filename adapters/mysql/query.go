@@ -7,7 +7,7 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/srawlin/changegate/pkg/adapter"
+	"github.com/srawlin/changeward/pkg/adapter"
 )
 
 var _ adapter.Querier = (*Adapter)(nil)

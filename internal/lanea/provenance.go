@@ -27,10 +27,10 @@ var knownAgents = []struct{ marker, name string }{
 	{"copilot", "GitHub Copilot"}, {"codex", "OpenAI Codex"}, {"openai", "OpenAI Codex"},
 	{"cursor", "Cursor"}, {"devin", "Devin"}, {"gemini", "Gemini CLI"}, {"jules", "Jules"},
 	{"sweep", "Sweep"}, {"aider", "Aider"}, {"coder agent", "Coder Agents"}, {"amazon q", "Amazon Q"},
-	{"changegate", "Changegate promotion"},
+	{"changeward", "Changeward promotion"},
 }
 
-var reTrailer = regexp.MustCompile(`(?im)^(co-authored-by|changegate-agent|assisted-by|generated-by):\s*(.+)$`)
+var reTrailer = regexp.MustCompile(`(?im)^(co-authored-by|changeward-agent|assisted-by|generated-by):\s*(.+)$`)
 
 func matchAgent(s string) string {
 	ls := strings.ToLower(s)
@@ -98,7 +98,7 @@ func DetectProvenance(dir, base, head string) Provenance {
 	}
 	for _, env := range []string{"GITHUB_HEAD_REF", "CI_MERGE_REQUEST_SOURCE_BRANCH_NAME", "CI_COMMIT_REF_NAME"} {
 		if b := os.Getenv(env); b != "" {
-			for _, prefix := range []string{"claude/", "copilot/", "codex/", "cursor/", "devin/", "changegate/"} {
+			for _, prefix := range []string{"claude/", "copilot/", "codex/", "cursor/", "devin/", "changeward/"} {
 				if strings.HasPrefix(b, prefix) {
 					add(matchAgent(prefix), "branch "+b)
 				}

@@ -1,11 +1,11 @@
 {
-  "name": "@changegate/cli",
+  "name": "@changeward/cli",
   "version": "0.1.0",
-  "description": "Change control for AI agents: preview, approve, apply and undo every database change an agent makes. Thin launcher for the Changegate binary.",
+  "description": "Change control for AI agents: preview, approve, apply and undo every database change an agent makes. Thin launcher for the Changeward binary.",
   "license": "Apache-2.0",
-  "homepage": "https://github.com/srawlin/changegate",
-  "repository": { "type": "git", "url": "https://github.com/srawlin/changegate.git", "directory": "packaging/npm" },
-  "bin": { "changegate": "bin/changegate.js" },
+  "homepage": "https://github.com/srawlin/changeward",
+  "repository": { "type": "git", "url": "https://github.com/srawlin/changeward.git", "directory": "packaging/npm" },
+  "bin": { "changeward": "bin/changeward.js" },
   "files": ["bin/"],
   "engines": { "node": ">=18" },
   "keywords": ["mcp", "postgres", "agents", "database", "undo", "change-control", "claude", "migrations"]

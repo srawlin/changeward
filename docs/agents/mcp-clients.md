@@ -1,25 +1,25 @@
 # Other MCP clients
 
-Any MCP client that can launch a stdio server can use Changegate. You get the tools and the preview → policy →
+Any MCP client that can launch a stdio server can use Changeward. You get the tools and the preview → policy →
 apply → undo flow. Clients without hooks can still run raw commands, so pair this with database credentials the
 agent doesn't have (see [executor.md](../executor.md)), or wrap their existing database server with
-`changegate proxy`.
+`changeward proxy`.
 
 ## The server
 
 ```sh
-changegate mcp postgres --target app      # or: mcp mysql
+changeward mcp postgres --target app      # or: mcp mysql
 ```
 
 Flags:
 
-- `--executor URL`: use a shared executor, with the token in `$CHANGEGATE_EXECUTOR_TOKEN`.
+- `--executor URL`: use a shared executor, with the token in `$CHANGEWARD_EXECUTOR_TOKEN`.
 - `--checkpoint`: checkpoint the target when the session starts.
 - `--branch`: work on a private copy of the target.
 - `--session ID`: attach to an existing session.
 
-The server must run in a directory that contains `changegate.yaml` (or a child of it), or set
-`CHANGEGATE_CONFIG=/path/to/changegate.yaml` in its environment.
+The server must run in a directory that contains `changeward.yaml` (or a child of it), or set
+`CHANGEWARD_CONFIG=/path/to/changeward.yaml` in its environment.
 
 **Tools:**
 
@@ -42,16 +42,16 @@ coding agents in this folder.
 **Claude Desktop** (`~/Library/Application Support/Claude/claude_desktop_config.json` on macOS):
 
 ```json
-{ "mcpServers": { "changegate": { "command": "/usr/local/bin/changegate",
+{ "mcpServers": { "changeward": { "command": "/usr/local/bin/changeward",
   "args": ["mcp", "postgres", "--target", "app"],
-  "env": { "CHANGEGATE_CONFIG": "/Users/me/projects/shop/changegate.yaml", "CHANGEGATE_AGENT": "claude-desktop" } } } }
+  "env": { "CHANGEWARD_CONFIG": "/Users/me/projects/shop/changeward.yaml", "CHANGEWARD_AGENT": "claude-desktop" } } } }
 ```
 
 **VS Code** (GitHub Copilot agent mode, `.vscode/mcp.json`):
 
 ```json
-{ "servers": { "changegate": { "type": "stdio", "command": "changegate", "args": ["mcp", "postgres", "--target", "app"],
-  "env": { "CHANGEGATE_AGENT": "vscode" } } } }
+{ "servers": { "changeward": { "type": "stdio", "command": "changeward", "args": ["mcp", "postgres", "--target", "app"],
+  "env": { "CHANGEWARD_AGENT": "vscode" } } } }
 ```
 
 **Windsurf** (`~/.codeium/windsurf/mcp_config.json`) and other clients that use the `mcpServers` shape: the same
@@ -60,32 +60,32 @@ as Claude Desktop.
 **Zed** (`settings.json`):
 
 ```json
-{ "context_servers": { "changegate": { "command": "changegate", "args": ["mcp", "postgres", "--target", "app"] } } }
+{ "context_servers": { "changeward": { "command": "changeward", "args": ["mcp", "postgres", "--target", "app"] } } }
 ```
 
 Clients that support MCP elicitation, like Claude Code, show inline approval prompts. Others report that
-approval is needed, and you approve with `changegate approve`.
+approval is needed, and you approve with `changeward approve`.
 
 ## Agents without MCP: AGENTS.md and the generic hook
 
-`changegate install agents-md` appends a section to `AGENTS.md`. It tells any agent that reads it to use the
-Changegate tools or `changegate exec`, and never `changegate approve`.
+`changeward install agents-md` appends a section to `AGENTS.md`. It tells any agent that reads it to use the
+Changeward tools or `changeward exec`, and never `changeward approve`.
 
 For agents with a pre-command hook mechanism of their own, call the generic check. It exits with 2 when the
 command must not run:
 
 ```sh
-changegate hook check "psql -d app -c 'DELETE FROM orders'"          # exit 2, reason on stderr
-changegate hook check --json "kubectl apply -f deploy.yaml"           # {"permission": "...", "reason": "..."}
+changeward hook check "psql -d app -c 'DELETE FROM orders'"          # exit 2, reason on stderr
+changeward hook check --json "kubectl apply -f deploy.yaml"           # {"permission": "...", "reason": "..."}
 ```
 
 ## Wrapping an existing database MCP server
 
-If your agent already uses a database MCP server, put Changegate in front of it:
+If your agent already uses a database MCP server, put Changeward in front of it:
 
 ```sh
-changegate proxy --target app -- npx -y @modelcontextprotocol/server-postgres "$DATABASE_URL"
+changeward proxy --target app -- npx -y @modelcontextprotocol/server-postgres "$DATABASE_URL"
 ```
 
 Reads pass through to the upstream server. SQL writes (`execute_sql`, `query` and the like) are planned, decided
-and applied by Changegate. Other tools that aren't read-only need approval under `--env` policy.
+and applied by Changeward. Other tools that aren't read-only need approval under `--env` policy.

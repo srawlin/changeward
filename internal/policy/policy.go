@@ -19,8 +19,8 @@ import (
 	"github.com/google/cel-go/cel"
 	"github.com/google/cel-go/common/types"
 	"github.com/google/cel-go/common/types/ref"
-	"github.com/srawlin/changegate/internal/model"
-	"github.com/srawlin/changegate/pkg/adapter"
+	"github.com/srawlin/changeward/internal/model"
+	"github.com/srawlin/changeward/pkg/adapter"
 	"gopkg.in/yaml.v3"
 )
 
@@ -84,7 +84,7 @@ func Parse(b []byte) (*File, error) {
 	return &f, nil
 }
 
-// BuiltinYAML returns the built-in default policy, for `changegate policy init`.
+// BuiltinYAML returns the built-in default policy, for `changeward policy init`.
 func BuiltinYAML() []byte { return builtinYAML }
 
 type compiled struct {

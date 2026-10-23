@@ -4,8 +4,8 @@ One policy file covers every system and both lanes. Rules are [CEL](https://cel.
 Start from the built-in defaults:
 
 ```sh
-changegate policy init          # writes changegate.policy.yaml with the built-in rules
-changegate policy check         # compile and report errors
+changeward policy init          # writes changeward.policy.yaml with the built-in rules
+changeward policy check         # compile and report errors
 ```
 
 ## Rules
@@ -45,7 +45,7 @@ freezes:
   ([concepts.md](concepts.md#environment-classes)).
 - **Errors fail closed:** a rule that fails to evaluate counts as `require`, never as a silent pass.
 - **Inline vs out-of-band:** `inline` lets the delegating human confirm in the agent's UI. `out-of-band` requires
-  `changegate approve`, Slack or the web view, from someone other than the proposer.
+  `changeward approve`, Slack or the web view, from someone other than the proposer.
 
 ## Variables
 
@@ -71,13 +71,13 @@ people other than the author ([GitHub](ci/github-actions.md#making-it-a-merge-ga
 ## Testing policy
 
 ```sh
-changegate plan --target app "DELETE FROM orders WHERE created_at < now() - interval '2 years'"   # plan + decision, nothing applied
-changegate gate evidence.json --json                                                             # decision for CI evidence
+changeward plan --target app "DELETE FROM orders WHERE created_at < now() - interval '2 years'"   # plan + decision, nothing applied
+changeward gate evidence.json --json                                                             # decision for CI evidence
 ```
 
 ## Slack approvals
 
-Configure `approvals.slack` in `changegate.yaml`, and run `changegate serve` where Slack can reach it (an
+Configure `approvals.slack` in `changeward.yaml`, and run `changeward serve` where Slack can reach it (an
 ingress or a tunnel). Its interactivity endpoint is `POST /slack/interactions`. Requests are verified with the
 signing secret.
 
@@ -92,7 +92,7 @@ signals:
     enabled: true          # key from $TYPESAFE_API_KEY
 ```
 
-Before auto-approving a change, Changegate asks TypeSafe's Jev two questions:
+Before auto-approving a change, Changeward asks TypeSafe's Jev two questions:
 
 - `intent_mismatch`: does the effect go beyond what the agent said it was doing?
 - `injection`: does the stated intent look injected?

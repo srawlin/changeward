@@ -1,4 +1,4 @@
-# Changegate built-in policy: environment-class defaults (plan §6.3).
+# Changeward built-in policy: environment-class defaults (plan §6.3).
 # These apply only when no rule in your own policy file matches.
 # Rules combine as deny > require > approve.
 version: 1
@@ -12,7 +12,7 @@ rules:
   - name: builtin/prod-direct-needs-incident
     when: change.lane == "direct" && change.env == "prod" && session.incident_ref == ""
     decide: deny
-    reason: direct production writes need an incident or ticket reference (changegate session start --incident ...)
+    reason: direct production writes need an incident or ticket reference (changeward session start --incident ...)
 
   - name: builtin/prod-direct-approval
     when: change.lane == "direct" && change.env == "prod"

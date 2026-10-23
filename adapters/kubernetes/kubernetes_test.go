@@ -10,23 +10,23 @@ import (
 	"testing"
 	"time"
 
-	"github.com/srawlin/changegate/pkg/adapter"
+	"github.com/srawlin/changeward/pkg/adapter"
 )
 
-// Tests need a cluster: $CG_TEST_KUBE_CONTEXT (default kind-changegate,
-// created with `kind create cluster --name changegate`).
+// Tests need a cluster: $CW_TEST_KUBE_CONTEXT (default kind-changeward,
+// created with `kind create cluster --name changeward`).
 func cluster(t *testing.T) adapter.Target {
 	t.Helper()
-	kctx := os.Getenv("CG_TEST_KUBE_CONTEXT")
+	kctx := os.Getenv("CW_TEST_KUBE_CONTEXT")
 	if kctx == "" {
-		kctx = "kind-changegate"
+		kctx = "kind-changeward"
 	}
 	base := adapter.Target{Name: "k8s", Adapter: "kubernetes", Env: "personal", Config: map[string]string{"context": kctx}}
 	ctx := context.Background()
 	if _, err := kubectl(ctx, base, nil, "version", "--request-timeout=3s"); err != nil {
 		t.Skip("no Kubernetes test cluster: " + err.Error())
 	}
-	ns := fmt.Sprintf("cg-test-%d", time.Now().UnixNano())
+	ns := fmt.Sprintf("cw-test-%d", time.Now().UnixNano())
 	if _, err := kubectl(ctx, base, nil, "create", "namespace", ns); err != nil {
 		t.Fatal(err)
 	}

@@ -1,16 +1,16 @@
-name: Changegate rehearse
+name: Changeward rehearse
 description: Rehearse database migrations in pull requests (forward → rollback → compare), report effects and reversibility, and gate on policy.
-author: Changegate
+author: Changeward
 branding:
   icon: shield
   color: blue
 
 inputs:
   version:
-    description: Changegate version to install (a release tag such as v0.1.0, "source" to go install the latest commit, or "local" to build the checked-out repository).
+    description: Changeward version to install (a release tag such as v0.1.0, "source" to go install the latest commit, or "local" to build the checked-out repository).
     default: latest
   database-url:
-    description: Admin DSN of a scratch Postgres server Changegate may CREATE DATABASE on. If empty, the action starts Postgres in Docker.
+    description: Admin DSN of a scratch Postgres server Changeward may CREATE DATABASE on. If empty, the action starts Postgres in Docker.
     default: ""
   postgres-version:
     description: Postgres major version to start when database-url is empty.
@@ -31,7 +31,7 @@ inputs:
     description: Environment class the change deploys to, for policy (personal, shared-dev, staging, prod, prod-restricted).
     default: prod
   policy:
-    description: Path to a policy file (default changegate.policy.yaml if present, else built-in defaults).
+    description: Path to a policy file (default changeward.policy.yaml if present, else built-in defaults).
     default: ""
   mode:
     description: "report: never fail the job; gate: fail when review is required or the change is denied; deny-only: fail only when denied."
@@ -73,27 +73,27 @@ runs:
         go-version: "1.27"
         cache: false
 
-    - name: Install changegate
+    - name: Install changeward
       shell: bash
       env:
-        CG_VERSION: ${{ inputs.version }}
+        CW_VERSION: ${{ inputs.version }}
       run: |
         set -euo pipefail
-        bin="$RUNNER_TEMP/changegate-bin"; mkdir -p "$bin"
-        if [ "$CG_VERSION" = "local" ]; then
-          (cd "$GITHUB_WORKSPACE" && CGO_ENABLED=1 go build -o "$bin/changegate" ./cmd/changegate)
-        elif [ "$CG_VERSION" = "source" ]; then
-          GOBIN="$bin" go install github.com/srawlin/changegate/cmd/changegate@latest
+        bin="$RUNNER_TEMP/changeward-bin"; mkdir -p "$bin"
+        if [ "$CW_VERSION" = "local" ]; then
+          (cd "$GITHUB_WORKSPACE" && CGO_ENABLED=1 go build -o "$bin/changeward" ./cmd/changeward)
+        elif [ "$CW_VERSION" = "source" ]; then
+          GOBIN="$bin" go install github.com/srawlin/changeward/cmd/changeward@latest
         else
           os=$(uname -s | tr '[:upper:]' '[:lower:]'); arch=$(uname -m)
           case "$arch" in x86_64) arch=amd64;; aarch64|arm64) arch=arm64;; esac
-          if [ "$CG_VERSION" = "latest" ]; then base="https://github.com/srawlin/changegate/releases/latest/download"
-          else base="https://github.com/srawlin/changegate/releases/download/$CG_VERSION"; fi
-          asset="changegate_${os}_${arch}.tar.gz"
+          if [ "$CW_VERSION" = "latest" ]; then base="https://github.com/srawlin/changeward/releases/latest/download"
+          else base="https://github.com/srawlin/changeward/releases/download/$CW_VERSION"; fi
+          asset="changeward_${os}_${arch}.tar.gz"
           curl -fsSL "$base/$asset" -o "$RUNNER_TEMP/$asset"
           curl -fsSL "$base/checksums.txt" -o "$RUNNER_TEMP/checksums.txt"
           (cd "$RUNNER_TEMP" && grep " $asset\$" checksums.txt | sha256sum -c -)
-          tar -xzf "$RUNNER_TEMP/$asset" -C "$bin" changegate
+          tar -xzf "$RUNNER_TEMP/$asset" -C "$bin" changeward
         fi
         echo "$bin" >> "$GITHUB_PATH"
 
@@ -104,9 +104,9 @@ runs:
         PGV: ${{ inputs.postgres-version }}
       run: |
         set -euo pipefail
-        docker run -d --name changegate-pg -e POSTGRES_PASSWORD=changegate -p 55432:5432 "postgres:${PGV}-alpine" >/dev/null
-        for i in $(seq 1 60); do docker exec changegate-pg pg_isready -U postgres >/dev/null 2>&1 && break; sleep 1; done
-        echo "CHANGEGATE_REHEARSAL_DSN=postgres://postgres:changegate@localhost:55432/postgres?sslmode=disable" >> "$GITHUB_ENV"
+        docker run -d --name changeward-pg -e POSTGRES_PASSWORD=changeward -p 55432:5432 "postgres:${PGV}-alpine" >/dev/null
+        for i in $(seq 1 60); do docker exec changeward-pg pg_isready -U postgres >/dev/null 2>&1 && break; sleep 1; done
+        echo "CHANGEWARD_REHEARSAL_DSN=postgres://postgres:changeward@localhost:55432/postgres?sslmode=disable" >> "$GITHUB_ENV"
 
     - name: Rehearse
       id: rehearse
@@ -130,18 +130,18 @@ runs:
           base="origin/$BASE_REF"
         fi
         [ -z "$base" ] && base="HEAD~1"
-        [ -n "$INPUT_DSN" ] && export CHANGEGATE_REHEARSAL_DSN="$INPUT_DSN"
-        [ -n "$INPUT_POLICY" ] && export CHANGEGATE_POLICY="$INPUT_POLICY"
-        args=(rehearse --base-ref "$base" --env "$INPUT_ENV" --synthetic "$INPUT_ROWS" --out "$RUNNER_TEMP/changegate-evidence.json")
+        [ -n "$INPUT_DSN" ] && export CHANGEWARD_REHEARSAL_DSN="$INPUT_DSN"
+        [ -n "$INPUT_POLICY" ] && export CHANGEWARD_POLICY="$INPUT_POLICY"
+        args=(rehearse --base-ref "$base" --env "$INPUT_ENV" --synthetic "$INPUT_ROWS" --out "$RUNNER_TEMP/changeward-evidence.json")
         [ -n "$INPUT_FRAMEWORK" ] && args+=(--framework "$INPUT_FRAMEWORK")
         [ -n "$INPUT_DIR" ] && args+=(--migrations-dir "$INPUT_DIR")
         [ -n "$INPUT_UP" ] && args+=(--up-cmd "$INPUT_UP")
         [ -n "$INPUT_DOWN" ] && args+=(--down-cmd "$INPUT_DOWN")
         code=0
-        changegate "${args[@]}" > "$RUNNER_TEMP/changegate-report.md" || code=$?
-        echo "evidence=$RUNNER_TEMP/changegate-evidence.json" >> "$GITHUB_OUTPUT"
+        changeward "${args[@]}" > "$RUNNER_TEMP/changeward-report.md" || code=$?
+        echo "evidence=$RUNNER_TEMP/changeward-evidence.json" >> "$GITHUB_OUTPUT"
         echo "rehearse_exit=$code" >> "$GITHUB_OUTPUT"
-        cat "$RUNNER_TEMP/changegate-report.md"
+        cat "$RUNNER_TEMP/changeward-report.md"
         if [ "$code" -gt 1 ]; then exit "$code"; fi
 
     - name: Report
@@ -150,8 +150,8 @@ runs:
       env:
         GITHUB_TOKEN: ${{ inputs.github-token }}
       run: |
-        changegate report "${{ steps.rehearse.outputs.evidence }}" --github --status \
-          || echo "::warning::could not post the Changegate report (needs permissions pull-requests: write and statuses: write)"
+        changeward report "${{ steps.rehearse.outputs.evidence }}" --github --status \
+          || echo "::warning::could not post the Changeward report (needs permissions pull-requests: write and statuses: write)"
 
     - name: Gate
       id: gate
@@ -163,16 +163,16 @@ runs:
         IS_PR: ${{ github.event.pull_request.number != '' }}
       run: |
         set -uo pipefail
-        [ -n "$INPUT_POLICY" ] && export CHANGEGATE_POLICY="$INPUT_POLICY"
+        [ -n "$INPUT_POLICY" ] && export CHANGEWARD_POLICY="$INPUT_POLICY"
         args=(gate "${{ steps.rehearse.outputs.evidence }}")
         # PR approvals that satisfy "review required" pass the gate (re-run on pull_request_review).
         [ "$IS_PR" = "true" ] && args+=(--github)
         code=0
-        changegate "${args[@]}" || code=$?
+        changeward "${args[@]}" || code=$?
         case "$MODE:$code" in
           report:*) exit 0 ;;
           gate:0) exit 0 ;;
-          gate:*) echo "::error::Changegate gate: review required or denied (exit $code)"; exit 1 ;;
-          deny-only:3|deny-only:1) echo "::error::Changegate gate: denied or rehearsal failed"; exit 1 ;;
+          gate:*) echo "::error::Changeward gate: review required or denied (exit $code)"; exit 1 ;;
+          deny-only:3|deny-only:1) echo "::error::Changeward gate: denied or rehearsal failed"; exit 1 ;;
           *) exit 0 ;;
         esac

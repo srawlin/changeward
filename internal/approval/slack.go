@@ -20,8 +20,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/srawlin/changegate/internal/engine"
-	"github.com/srawlin/changegate/internal/model"
+	"github.com/srawlin/changeward/internal/engine"
+	"github.com/srawlin/changeward/internal/model"
 )
 
 // Slack posts approval requests and handles interactions.
@@ -68,21 +68,21 @@ func Message(c *model.Change, interactive bool) map[string]any {
 	}
 	who := c.Principal.String()
 	blocks := []any{
-		map[string]any{"type": "header", "text": map[string]any{"type": "plain_text", "text": "Changegate: approval needed (" + c.Target.Env + ")"}},
+		map[string]any{"type": "header", "text": map[string]any{"type": "plain_text", "text": "Changeward: approval needed (" + c.Target.Env + ")"}},
 		map[string]any{"type": "section", "text": map[string]any{"type": "mrkdwn", "text": fmt.Sprintf("*%s* on `%s` by %s\n%s", c.Plan.Reversibility, c.Target.Name, who, reasons)}},
 		map[string]any{"type": "section", "text": map[string]any{"type": "mrkdwn", "text": "```" + truncate(c.Plan.Diff, 2800) + "```"}},
 		map[string]any{"type": "context", "elements": []any{map[string]any{"type": "mrkdwn", "text": fmt.Sprintf("plan `%s` · change `%s` · expires %s", c.Plan.ID, c.ID, c.Plan.ExpiresAt)}}},
 	}
 	if interactive {
 		val := c.Plan.ID + "|" + c.Plan.Hash
-		blocks = append(blocks, map[string]any{"type": "actions", "block_id": "changegate", "elements": []any{
+		blocks = append(blocks, map[string]any{"type": "actions", "block_id": "changeward", "elements": []any{
 			map[string]any{"type": "button", "action_id": "approve", "style": "primary", "text": map[string]any{"type": "plain_text", "text": "Approve"}, "value": val},
 			map[string]any{"type": "button", "action_id": "reject", "style": "danger", "text": map[string]any{"type": "plain_text", "text": "Reject"}, "value": val},
 		}})
 	} else {
-		blocks = append(blocks, map[string]any{"type": "context", "elements": []any{map[string]any{"type": "mrkdwn", "text": "Approve with `changegate approve " + c.Plan.ID + "`"}}})
+		blocks = append(blocks, map[string]any{"type": "context", "elements": []any{map[string]any{"type": "mrkdwn", "text": "Approve with `changeward approve " + c.Plan.ID + "`"}}})
 	}
-	return map[string]any{"text": "Changegate approval needed: " + c.Plan.ID, "blocks": blocks}
+	return map[string]any{"text": "Changeward approval needed: " + c.Plan.ID, "blocks": blocks}
 }
 
 // NotifyPending implements engine.Notifier.
@@ -177,7 +177,7 @@ type interaction struct {
 	ResponseURL string `json:"response_url"`
 }
 
-// Identity maps a Slack user to a Changegate identity.
+// Identity maps a Slack user to a Changeward identity.
 func (s *Slack) Identity(userID string) string {
 	if u, ok := s.Users[userID]; ok {
 		return "user:" + strings.TrimPrefix(u, "user:")
@@ -224,7 +224,7 @@ func (s *Slack) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	case err != nil:
 		text = fmt.Sprintf(":warning: %s could not %s plan `%s`: %v", who, act.ActionID, planID, err)
 	case c.State == model.Approved:
-		text = fmt.Sprintf(":white_check_mark: approved by %s. Apply with `changegate apply %s` (the agent can also call apply_change).", who, planID)
+		text = fmt.Sprintf(":white_check_mark: approved by %s. Apply with `changeward apply %s` (the agent can also call apply_change).", who, planID)
 	case c.State == model.Rejected:
 		text = fmt.Sprintf(":no_entry: rejected by %s.", who)
 	default:

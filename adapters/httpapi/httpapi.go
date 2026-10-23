@@ -1,4 +1,4 @@
-// Package httpapi is the Changegate adapter for REST APIs with compensation
+// Package httpapi is the Changeward adapter for REST APIs with compensation
 // manifests (§7.6).
 //
 // Operation kind "http"; payload is JSON {"method", "path", "query", "body"}.
@@ -46,7 +46,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/srawlin/changegate/pkg/adapter"
+	"github.com/srawlin/changeward/pkg/adapter"
 	"gopkg.in/yaml.v3"
 )
 

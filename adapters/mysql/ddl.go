@@ -7,7 +7,7 @@ import (
 	"strings"
 
 	"github.com/pingcap/tidb/pkg/parser/ast"
-	"github.com/srawlin/changegate/pkg/adapter"
+	"github.com/srawlin/changeward/pkg/adapter"
 )
 
 func exists(ctx context.Context, q queryer, schema, table string) bool {
@@ -206,7 +206,7 @@ func (a *Adapter) applyDDL(ctx context.Context, d *sql.DB, s *Stmt, st planStep,
 			if err != nil {
 				return u, err
 			}
-			trashCol := "_cg_" + strings.TrimPrefix(planID, "p_")[:6] + "_" + col
+			trashCol := "_cw_" + strings.TrimPrefix(planID, "p_")[:6] + "_" + col
 			if len(trashCol) > 64 {
 				trashCol = trashCol[:64]
 			}

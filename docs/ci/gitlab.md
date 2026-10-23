@@ -2,7 +2,7 @@
 
 The `rehearse` CI/CD component does what the GitHub Action does. On every merge request pipeline, it rehearses
 new migrations on a throwaway Postgres service. It posts or updates an MR note with the effect report, sets a
-`changegate/rehearsal` commit status, and applies your policy.
+`changeward/rehearsal` commit status, and applies your policy.
 
 **Verified on gitlab.com** (`rawlinson-software-inc-group/test`):
 
@@ -16,7 +16,7 @@ new migrations on a throwaway Postgres service. It posts or updates an MR note w
 
 ```yaml
 include:
-  - component: $CI_SERVER_FQDN/<group>/<changegate-project>/rehearse@<version>
+  - component: $CI_SERVER_FQDN/<group>/<changeward-project>/rehearse@<version>
     inputs:
       mode: report              # report | gate | deny-only
       synthetic-rows: "1000"    # T1; "0" = schema only
@@ -28,9 +28,9 @@ include:
 The job runs only in merge request pipelines (`$CI_PIPELINE_SOURCE == "merge_request_event"`). It uses
 `alpine:3.20` with a `postgres:<postgres-version>-alpine` service.
 
-**Notes and statuses:** add a masked CI/CD variable `CHANGEGATE_GITLAB_TOKEN`, holding a project access token
+**Notes and statuses:** add a masked CI/CD variable `CHANGEWARD_GITLAB_TOKEN`, holding a project access token
 with `api` scope (`GITLAB_TOKEN` also works). Without it, the report is printed in the job log and kept as the
-artifact `changegate-report.md`, along with `changegate-evidence.json`.
+artifact `changeward-report.md`, along with `changeward-evidence.json`.
 
 ## Inputs
 
@@ -42,15 +42,15 @@ artifact `changegate-report.md`, along with `changegate-evidence.json`.
 | `postgres-version` | `18` | Postgres service image |
 | `framework`, `migrations-dir` | detected | Overrides |
 | `stage` | `test` | Pipeline stage |
-| `version` | `latest` | Changegate release to download from GitHub, or `preinstalled` when your job image already has `changegate` |
+| `version` | `latest` | Changeward release to download from GitHub, or `preinstalled` when your job image already has `changeward` |
 | `binary-url` | — | Download the Linux tarball from here instead, e.g. your project's generic package registry. `CI_JOB_TOKEN` is sent for URLs on the same GitLab instance. |
 
 Before the first public release, publish a build to your project's package registry and point `binary-url` at
 it, as our test project does:
 
 ```sh
-curl -H "PRIVATE-TOKEN: $TOKEN" --upload-file changegate_linux_amd64.tar.gz \
-  "https://gitlab.com/api/v4/projects/<id>/packages/generic/changegate/0.1.0/changegate_linux_amd64.tar.gz"
+curl -H "PRIVATE-TOKEN: $TOKEN" --upload-file changeward_linux_amd64.tar.gz \
+  "https://gitlab.com/api/v4/projects/<id>/packages/generic/changeward/0.1.0/changeward_linux_amd64.tar.gz"
 ```
 
 The job runs on GitLab's shared Linux amd64 runners. The binary is linked against musl for Alpine; build it with
@@ -61,7 +61,7 @@ the repository's `Dockerfile` (`--target build`).
 1. Use `mode: gate`, or keep `report` and rely on the commit status.
 2. Turn on **Settings → Merge requests → Pipelines must succeed**.
 
-   The commit status is part of the pipeline, so a `pending` `changegate/rehearsal` keeps the pipeline from
+   The commit status is part of the pipeline, so a `pending` `changeward/rehearsal` keeps the pipeline from
    succeeding. On MR !1 the pipeline stayed "running" until review.
 3. Configure **approval rules** (or CODEOWNERS with code-owner approval) for the people your policy names.
 

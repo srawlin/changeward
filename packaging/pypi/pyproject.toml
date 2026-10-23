@@ -3,19 +3,19 @@ requires = ["hatchling>=1.25"]
 build-backend = "hatchling.build"
 
 [project]
-name = "changegate"
+name = "changeward"
 version = "0.1.0"
-description = "Change control for AI agents: preview, approve, apply and undo every database change an agent makes. Thin launcher for the Changegate binary."
+description = "Change control for AI agents: preview, approve, apply and undo every database change an agent makes. Thin launcher for the Changeward binary."
 readme = "README.md"
 license = "Apache-2.0"
 requires-python = ">=3.9"
 keywords = ["mcp", "postgres", "agents", "database", "undo", "change-control", "migrations"]
 
 [project.urls]
-Homepage = "https://github.com/srawlin/changegate"
+Homepage = "https://github.com/srawlin/changeward"
 
 [project.scripts]
-changegate = "changegate.launcher:main"
+changeward = "changeward.launcher:main"
 
 [tool.hatch.build.targets.wheel]
-packages = ["src/changegate"]
+packages = ["src/changeward"]

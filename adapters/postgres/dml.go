@@ -84,7 +84,7 @@ func alias(rv *pg.RangeVar) string {
 }
 
 // dmlStatements builds the SQL used to capture images for a DML statement.
-// It strips any RETURNING list the caller wrote (Changegate's own RETURNING
+// It strips any RETURNING list the caller wrote (Changeward's own RETURNING
 // replaces it).
 func dmlStatements(s *Stmt, serverVersion int) (mode, execSQL, preSQL string, err error) {
 	n := proto.Clone(s.Node).(*pg.Node)
@@ -105,7 +105,7 @@ func dmlStatements(s *Stmt, serverVersion int) (mode, execSQL, preSQL string, er
 		return "", "", "", fmt.Errorf("deparse: %w", err)
 	}
 	if serverVersion >= 180000 {
-		return CaptureReturning, base + " RETURNING WITH (OLD AS cg_old, NEW AS cg_new) to_jsonb(cg_old)::text, to_jsonb(cg_new)::text", "", nil
+		return CaptureReturning, base + " RETURNING WITH (OLD AS cw_old, NEW AS cw_new) to_jsonb(cw_old)::text, to_jsonb(cw_new)::text", "", nil
 	}
 	// Fallback: simple single-table statements only.
 	if s.HasFlag(FlagMultiTable) || s.HasFlag(FlagWithClause) {

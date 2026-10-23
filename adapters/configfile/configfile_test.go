@@ -13,7 +13,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/srawlin/changegate/pkg/adapter"
+	"github.com/srawlin/changeward/pkg/adapter"
 )
 
 func conf(body string) string {
@@ -25,11 +25,11 @@ func nginxTarget(t *testing.T) adapter.Target {
 	if err := exec.Command("docker", "info").Run(); err != nil {
 		t.Skip("docker not available")
 	}
-	dir, _ := os.MkdirTemp("", "cg-nginx-")
+	dir, _ := os.MkdirTemp("", "cw-nginx-")
 	t.Cleanup(func() { _ = os.RemoveAll(dir) })
 	path := filepath.Join(dir, "default.conf")
 	_ = os.WriteFile(path, []byte(conf("v1")), 0o644)
-	name := fmt.Sprintf("cg-nginx-%d", time.Now().UnixNano())
+	name := fmt.Sprintf("cw-nginx-%d", time.Now().UnixNano())
 	port := "58" + fmt.Sprint(100+time.Now().UnixNano()%800)
 	if out, err := exec.Command("docker", "run", "-d", "--name", name, "-p", port+":80", "-v", dir+":/etc/nginx/conf.d", "nginx:alpine").CombinedOutput(); err != nil {
 		t.Skipf("cannot start nginx: %v %s", err, out)

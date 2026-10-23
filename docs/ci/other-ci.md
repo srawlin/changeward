@@ -7,16 +7,16 @@ reach a scratch Postgres can use them.
 
 ```sh
 # A scratch Postgres the job may CREATE DATABASE on:
-docker run -d --name cg-pg -e POSTGRES_PASSWORD=pg -p 55432:5432 postgres:18-alpine
-export CHANGEGATE_REHEARSAL_DSN="postgres://postgres:pg@localhost:55432/postgres?sslmode=disable"
+docker run -d --name cw-pg -e POSTGRES_PASSWORD=pg -p 55432:5432 postgres:18-alpine
+export CHANGEWARD_REHEARSAL_DSN="postgres://postgres:pg@localhost:55432/postgres?sslmode=disable"
 
-changegate rehearse --base-ref origin/main --synthetic 1000 --env prod --out evidence.json > report.md
-changegate gate evidence.json        # 0 approved · 2 review required · 3 denied · 1 rehearsal failed
+changeward rehearse --base-ref origin/main --synthetic 1000 --env prod --out evidence.json > report.md
+changeward gate evidence.json        # 0 approved · 2 review required · 3 denied · 1 rehearsal failed
 ```
 
 - `report.md` is the Markdown report. Post it with your CI's PR-comment step.
-- `changegate gate --json` prints the decision, approvers and reasons as JSON.
-- `changegate report evidence.json` re-renders the report from the evidence.
+- `changeward gate --json` prints the decision, approvers and reasons as JSON.
+- `changeward report evidence.json` re-renders the report from the evidence.
 
 Useful `rehearse` flags:
 
@@ -32,24 +32,24 @@ Useful `rehearse` flags:
 ## Terraform and Kubernetes
 
 ```sh
-changegate tf review --plan-json plan.json --env prod                    # 0 / 2 / 3
-changegate k8s gate --manifests rendered/ --target cluster --executor URL # 0 only when approved
+changeward tf review --plan-json plan.json --env prod                    # 0 / 2 / 3
+changeward k8s gate --manifests rendered/ --target cluster --executor URL # 0 only when approved
 ```
 
 ## Jenkins example
 
 ```groovy
-stage('Changegate') {
+stage('Changeward') {
   steps {
     sh '''
-      docker run -d --rm --name cg-pg-$BUILD_ID -e POSTGRES_PASSWORD=pg -p 55432:5432 postgres:18-alpine
-      export CHANGEGATE_REHEARSAL_DSN="postgres://postgres:pg@localhost:55432/postgres?sslmode=disable"
-      changegate rehearse --base-ref origin/$CHANGE_TARGET --synthetic 1000 --out evidence.json > report.md
-      changegate gate evidence.json --report-only
+      docker run -d --rm --name cw-pg-$BUILD_ID -e POSTGRES_PASSWORD=pg -p 55432:5432 postgres:18-alpine
+      export CHANGEWARD_REHEARSAL_DSN="postgres://postgres:pg@localhost:55432/postgres?sslmode=disable"
+      changeward rehearse --base-ref origin/$CHANGE_TARGET --synthetic 1000 --out evidence.json > report.md
+      changeward gate evidence.json --report-only
     '''
     archiveArtifacts artifacts: 'report.md,evidence.json'
   }
-  post { always { sh 'docker rm -f cg-pg-$BUILD_ID || true' } }
+  post { always { sh 'docker rm -f cw-pg-$BUILD_ID || true' } }
 }
 ```
 

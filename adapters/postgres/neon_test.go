@@ -7,7 +7,7 @@ import (
 	"time"
 
 	"github.com/jackc/pgx/v5"
-	"github.com/srawlin/changegate/pkg/adapter"
+	"github.com/srawlin/changeward/pkg/adapter"
 )
 
 // TestNeonLive exercises Neon checkpoints, restore and branch copies against
@@ -25,8 +25,8 @@ func TestNeonLive(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	_, err = c.Exec(ctx, `DROP TABLE IF EXISTS cg_neon; CREATE TABLE cg_neon (id int PRIMARY KEY, v text);
-		INSERT INTO cg_neon SELECT g, 'v' || g FROM generate_series(1, 100) g;`)
+	_, err = c.Exec(ctx, `DROP TABLE IF EXISTS cw_neon; CREATE TABLE cw_neon (id int PRIMARY KEY, v text);
+		INSERT INTO cw_neon SELECT g, 'v' || g FROM generate_series(1, 100) g;`)
 	_ = c.Close(ctx)
 	if err != nil {
 		t.Fatal(err)
@@ -42,7 +42,7 @@ func TestNeonLive(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer func() { _ = a.DeleteCheckpoint(context.Background(), tg, cp) }()
-	p := mustPlan(t, a, tg, "DELETE FROM cg_neon; DROP TABLE cg_neon CASCADE")
+	p := mustPlan(t, a, tg, "DELETE FROM cw_neon; DROP TABLE cw_neon CASCADE")
 	if _, err := a.Apply(ctx, tg, p); err != nil {
 		t.Fatal(err)
 	}
@@ -88,7 +88,7 @@ func TestNeonLive(t *testing.T) {
 
 func fpRetry(ctx context.Context, a *Adapter, t adapter.Target) string {
 	a.dropPool(t.Config["dsn"])
-	p, err := a.Plan(ctx, t, adapter.Operation{Kind: "changegate.fingerprint"})
+	p, err := a.Plan(ctx, t, adapter.Operation{Kind: "changeward.fingerprint"})
 	if err != nil {
 		return ""
 	}

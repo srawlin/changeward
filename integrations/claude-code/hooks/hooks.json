@@ -4,7 +4,7 @@
       {
         "matcher": "Bash",
         "hooks": [
-          { "type": "command", "command": "npx -y @changegate/cli hook claude-code", "timeout": 15 }
+          { "type": "command", "command": "npx -y @changeward/cli hook claude-code", "timeout": 15 }
         ]
       }
     ]

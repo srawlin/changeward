@@ -4,8 +4,8 @@
 // guards reject stale plans and stale undos.
 //
 // Adapters that run out of process take part through two conventions on
-// Plan: an operation of kind "changegate.fingerprint" returns
-// facts["fingerprint"] (a hash of target state), and "changegate.corpus" with
+// Plan: an operation of kind "changeward.fingerprint" returns
+// facts["fingerprint"] (a hash of target state), and "changeward.corpus" with
 // params seed and n returns facts["corpus"] (a JSON list of operations).
 // In-process drivers can supply Fingerprint and Operations directly instead.
 package conformance
@@ -17,7 +17,7 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/srawlin/changegate/pkg/adapter"
+	"github.com/srawlin/changeward/pkg/adapter"
 )
 
 // Driver describes how to test one adapter.
@@ -25,9 +25,9 @@ type Driver struct {
 	Adapter adapter.Adapter
 	// NewTarget returns a fresh, empty target and a cleanup function.
 	NewTarget func(ctx context.Context) (adapter.Target, func(), error)
-	// Operations, if nil, is fetched with the changegate.corpus convention.
+	// Operations, if nil, is fetched with the changeward.corpus convention.
 	Operations func(ctx context.Context, t adapter.Target, seed int64, n int) ([]adapter.Operation, error)
-	// Fingerprint, if nil, uses the changegate.fingerprint convention.
+	// Fingerprint, if nil, uses the changeward.fingerprint convention.
 	Fingerprint func(ctx context.Context, t adapter.Target) (string, error)
 	Seed        int64
 	N           int
@@ -97,7 +97,7 @@ func (r *runner) fingerprint(ctx context.Context, t adapter.Target) (string, err
 	if r.d.Fingerprint != nil {
 		return r.d.Fingerprint(ctx, t)
 	}
-	p, err := r.d.Adapter.Plan(ctx, t, adapter.Operation{Kind: "changegate.fingerprint"})
+	p, err := r.d.Adapter.Plan(ctx, t, adapter.Operation{Kind: "changeward.fingerprint"})
 	if err != nil {
 		return "", fmt.Errorf("fingerprint: %w", err)
 	}
@@ -112,7 +112,7 @@ func (r *runner) operations(ctx context.Context, t adapter.Target) ([]adapter.Op
 	if r.d.Operations != nil {
 		return r.d.Operations(ctx, t, r.d.Seed, r.d.N)
 	}
-	p, err := r.d.Adapter.Plan(ctx, t, adapter.Operation{Kind: "changegate.corpus",
+	p, err := r.d.Adapter.Plan(ctx, t, adapter.Operation{Kind: "changeward.corpus",
 		Params: map[string]string{"seed": fmt.Sprint(r.d.Seed), "n": fmt.Sprint(r.d.N)}})
 	if err != nil {
 		return nil, fmt.Errorf("corpus: %w", err)

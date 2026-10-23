@@ -1,12 +1,12 @@
-# Changegate GitHub Action
+# Changeward GitHub Action
 
 Rehearses the database migrations a pull request adds — forward, observe locks/rewrites/rows, run the down
 migration, compare catalog and data checksums — and posts an effect report on the PR. Policy turns the evidence
 into a decision: auto-approve (standard change), review by named approvers, or deny.
 
 ```yaml
-# .github/workflows/changegate.yml
-name: changegate
+# .github/workflows/changeward.yml
+name: changeward
 on: pull_request
 permissions:
   contents: read
@@ -18,7 +18,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with: { fetch-depth: 0 }
-      - uses: srawlin/changegate/integrations/github-action@main   # pin a release tag once published
+      - uses: srawlin/changeward/integrations/github-action@main   # pin a release tag once published
         with:
           mode: report          # start with report; switch to gate when you trust it
           synthetic-rows: 1000  # T1; set 0 for schema-only T0

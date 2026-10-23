@@ -10,14 +10,14 @@ import { createServer } from "node:net";
 import { Client, Conflict, Denied, PendingApproval, guarded, proposeAndApplyText, applyWithInterrupt } from "../src/index.ts";
 
 const here = dirname(fileURLToPath(import.meta.url));
-const BIN = process.env.CHANGEGATE_BIN ?? join(here, "..", "..", "..", "bin", "changegate");
-const DEV = "cgx_ts_dev_token", OPS = "cgx_ts_ops_token";
+const BIN = process.env.CHANGEWARD_BIN ?? join(here, "..", "..", "..", "bin", "changeward");
+const DEV = "cwx_ts_dev_token", OPS = "cwx_ts_ops_token";
 const sha = (t: string) => createHash("sha256").update(t).digest("hex");
 let proc: ChildProcess;
 let url = "";
 
 before(async () => {
-  const dir = mkdtempSync(join(tmpdir(), "cg-ts-"));
+  const dir = mkdtempSync(join(tmpdir(), "cw-ts-"));
   const port: number = await new Promise((r) => { const s = createServer(); s.listen(0, "127.0.0.1", () => { const p = (s.address() as { port: number }).port; s.close(() => r(p)); }); });
   const cfg = {
     targets: {
@@ -27,8 +27,8 @@ before(async () => {
     },
     executor: { tokens: [{ name: "dev", sha256: sha(DEV), roles: ["propose"] }, { name: "ops", sha256: sha(OPS), roles: ["propose", "approve"] }] },
   };
-  writeFileSync(join(dir, "changegate.yaml"), JSON.stringify(cfg));
-  proc = spawn(BIN, ["executor", "serve", "--addr", `127.0.0.1:${port}`], { env: { ...process.env, CHANGEGATE_CONFIG: join(dir, "changegate.yaml") }, stdio: "ignore" });
+  writeFileSync(join(dir, "changeward.yaml"), JSON.stringify(cfg));
+  proc = spawn(BIN, ["executor", "serve", "--addr", `127.0.0.1:${port}`], { env: { ...process.env, CHANGEWARD_CONFIG: join(dir, "changeward.yaml") }, stdio: "ignore" });
   url = `http://127.0.0.1:${port}`;
   for (let i = 0; i < 100; i++) {
     try { if ((await fetch(url + "/healthz")).ok) break; } catch { /* starting */ }

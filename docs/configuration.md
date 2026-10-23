@@ -1,7 +1,7 @@
 # Configuration
 
-Changegate reads `changegate.yaml` from `$CHANGEGATE_CONFIG`, or from the working directory or the nearest parent
-that has one. `changegate connect` creates and updates it. Values support `${VAR}` expansion, so keep secrets in
+Changeward reads `changeward.yaml` from `$CHANGEWARD_CONFIG`, or from the working directory or the nearest parent
+that has one. `changeward connect` creates and updates it. Values support `${VAR}` expansion, so keep secrets in
 the environment.
 
 ```yaml
@@ -15,16 +15,16 @@ targets:
       checkpoint_strategy: template
 default_target: app
 
-policy: changegate.policy.yaml          # default: changegate.policy.yaml next to this file, else built-ins
-store: .changegate/changegate.db        # audit log and change records (SQLite); $CHANGEGATE_STORE
+policy: changeward.policy.yaml          # default: changeward.policy.yaml next to this file, else built-ins
+store: .changeward/changeward.db        # audit log and change records (SQLite); $CHANGEWARD_STORE
 plan_ttl: 15m                           # plans older than this must be re-planned
 
 approvals:
   slack:
-    bot_token: ${SLACK_BOT_TOKEN}       # interactive Approve/Reject (needs `changegate serve`)
+    bot_token: ${SLACK_BOT_TOKEN}       # interactive Approve/Reject (needs `changeward serve`)
     channel: "#db-changes"
     signing_secret: ${SLACK_SIGNING_SECRET}
-    users: { U012ABC: "user:alice" }    # Slack user → Changegate identity (for separation of duties)
+    users: { U012ABC: "user:alice" }    # Slack user → Changeward identity (for separation of duties)
     # webhook_url: ${SLACK_WEBHOOK}     # notifications only
 
 signals:
@@ -35,18 +35,18 @@ telemetry:
   otlp_endpoint: http://otel-collector:4318   # or $OTEL_EXPORTER_OTLP_ENDPOINT
   headers: { authorization: "Bearer ${OTEL_TOKEN}" }
 
-executor:                               # only for `changegate executor serve`
+executor:                               # only for `changeward executor serve`
   tokens:
     - { name: alice, sha256: "…", roles: [propose] }
 
 adapters:                               # out-of-process adapters (go-plugin gRPC)
-  mongo: { path: /usr/local/bin/changegate-adapter-mongo }
+  mongo: { path: /usr/local/bin/changeward-adapter-mongo }
 ```
 
-Use `changegate targets` to list targets, and `changegate connect NAME …` to add or replace one:
+Use `changeward targets` to list targets, and `changeward connect NAME …` to add or replace one:
 
 ```sh
-changegate connect NAME --adapter ADAPTER --env CLASS [--dsn DSN] [--option key=value …] [--sensitive t.c,…] [--default]
+changeward connect NAME --adapter ADAPTER --env CLASS [--dsn DSN] [--option key=value …] [--sensitive t.c,…] [--default]
 ```
 
 ## Target options by adapter
@@ -80,7 +80,7 @@ rolled-back InnoDB transaction. DDL is analysed statically, and `DROP` is soft-d
 | `kubectl` | Binary path |
 | `rollout_timeout` | How long verify waits for rollouts (e.g. `5m`) |
 
-The operation payload is YAML manifests: `changegate exec --target cluster -f deploy.yaml`.
+The operation payload is YAML manifests: `changeward exec --target cluster -f deploy.yaml`.
 
 ### Terraform / OpenTofu (`--adapter terraform`)
 
@@ -129,18 +129,18 @@ Calls with no matching entry are irreversible.
 
 | Variable | Meaning |
 | --- | --- |
-| `CHANGEGATE_CONFIG`, `CHANGEGATE_STORE`, `CHANGEGATE_POLICY` | Override file locations |
-| `CHANGEGATE_AGENT` | Marks the process as an agent: hooks and the MCP server set it, and approvals are refused when it's set |
-| `CHANGEGATE_USER` | Your identity, if not your OS user |
-| `CHANGEGATE_SESSION` | The current session |
-| `CHANGEGATE_EXECUTOR_URL`, `CHANGEGATE_EXECUTOR_TOKEN` | Use a shared executor |
-| `CHANGEGATE_REHEARSAL_DSN` | Scratch server for `rehearse` |
-| `CHANGEGATE_GITLAB_TOKEN` | GitLab notes, statuses and approvals in CI |
+| `CHANGEWARD_CONFIG`, `CHANGEWARD_STORE`, `CHANGEWARD_POLICY` | Override file locations |
+| `CHANGEWARD_AGENT` | Marks the process as an agent: hooks and the MCP server set it, and approvals are refused when it's set |
+| `CHANGEWARD_USER` | Your identity, if not your OS user |
+| `CHANGEWARD_SESSION` | The current session |
+| `CHANGEWARD_EXECUTOR_URL`, `CHANGEWARD_EXECUTOR_TOKEN` | Use a shared executor |
+| `CHANGEWARD_REHEARSAL_DSN` | Scratch server for `rehearse` |
+| `CHANGEWARD_GITLAB_TOKEN` | GitLab notes, statuses and approvals in CI |
 | `OTEL_EXPORTER_OTLP_ENDPOINT` | OpenTelemetry export |
-| `TYPESAFE_API_KEY` | Jev signals and `changegate sensitive suggest` |
+| `TYPESAFE_API_KEY` | Jev signals and `changeward sensitive suggest` |
 
 ## Sensitive columns
 
 `sensitive` entries (`table.column` or `*.column`) are redacted in every plan and query result shown to an agent.
-`changegate sensitive suggest` proposes entries from table and column names and types only, never values. It
+`changeward sensitive suggest` proposes entries from table and column names and types only, never values. It
 uses Jev and needs `$TYPESAFE_API_KEY`.

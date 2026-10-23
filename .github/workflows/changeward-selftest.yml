@@ -1,0 +1,24 @@
+name: changeward-selftest
+on:
+  pull_request:
+    paths: ["examples/migrations/**", "integrations/github-action/**", "cmd/**", "adapters/**", "internal/**"]
+  pull_request_review:            # an approval can satisfy "review required"
+    types: [submitted, dismissed]
+permissions:
+  contents: read
+  pull-requests: write
+  statuses: write
+jobs:
+  rehearse:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with: { fetch-depth: 0 }
+      - id: cw
+        uses: ./integrations/github-action
+        with:
+          version: local
+          migrations-dir: examples/migrations
+          synthetic-rows: "500"
+          mode: report
+      - run: echo "decision=${{ steps.cw.outputs.decision }} approvers=${{ steps.cw.outputs.approvers }}"

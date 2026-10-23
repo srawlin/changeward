@@ -1,9 +1,9 @@
 {
   "mcpServers": {
-    "changegate": {
+    "changeward": {
       "command": "npx",
-      "args": ["-y", "@changegate/cli", "mcp", "postgres"],
-      "env": { "CHANGEGATE_AGENT": "claude-code" }
+      "args": ["-y", "@changeward/cli", "mcp", "postgres"],
+      "env": { "CHANGEWARD_AGENT": "claude-code" }
     }
   }
 }

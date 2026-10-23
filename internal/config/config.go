@@ -1,4 +1,4 @@
-// Package config loads changegate.yaml: targets (connections bound to an
+// Package config loads changeward.yaml: targets (connections bound to an
 // environment class), policy, store location, approvals and plugin adapters.
 package config
 
@@ -11,12 +11,12 @@ import (
 	"sort"
 	"time"
 
-	"github.com/srawlin/changegate/pkg/adapter"
+	"github.com/srawlin/changeward/pkg/adapter"
 	"gopkg.in/yaml.v3"
 )
 
-// FileName is the config file Changegate looks for.
-const FileName = "changegate.yaml"
+// FileName is the config file Changeward looks for.
+const FileName = "changeward.yaml"
 
 // Target is a connection to one system, bound to an environment class.
 // The environment class comes from the connection, never from the agent.
@@ -35,11 +35,11 @@ type Slack struct {
 	// WebhookURL posts notifications only (approve with the CLI).
 	WebhookURL string `yaml:"webhook_url,omitempty"`
 	// BotToken + Channel post interactive Approve/Reject messages; Slack sends
-	// clicks to `changegate serve` (/slack/interactions), verified with SigningSecret.
+	// clicks to `changeward serve` (/slack/interactions), verified with SigningSecret.
 	BotToken      string `yaml:"bot_token,omitempty"`
 	Channel       string `yaml:"channel,omitempty"`
 	SigningSecret string `yaml:"signing_secret,omitempty"`
-	// Users maps Slack user IDs to Changegate identities (user:<name>), so
+	// Users maps Slack user IDs to Changeward identities (user:<name>), so
 	// separation of duties compares like with like.
 	Users map[string]string `yaml:"users,omitempty"`
 }
@@ -73,8 +73,8 @@ type Telemetry struct {
 	Headers      map[string]string `yaml:"headers,omitempty"` // values support ${VAR}
 }
 
-// ExecutorToken is an API token accepted by `changegate executor serve`
-// (only the SHA-256 is stored; create entries with `changegate executor token`).
+// ExecutorToken is an API token accepted by `changeward executor serve`
+// (only the SHA-256 is stored; create entries with `changeward executor token`).
 type ExecutorToken struct {
 	Name   string   `yaml:"name"`
 	SHA256 string   `yaml:"sha256"`
@@ -92,7 +92,7 @@ type Plugin struct {
 	Args []string `yaml:"args,omitempty"`
 }
 
-// Config is changegate.yaml.
+// Config is changeward.yaml.
 type Config struct {
 	Targets   map[string]Target `yaml:"targets"`
 	Policy    string            `yaml:"policy,omitempty"`
@@ -112,10 +112,10 @@ type Config struct {
 	Path string `yaml:"-"`
 }
 
-// Load finds and loads the config: $CHANGEGATE_CONFIG, else changegate.yaml
+// Load finds and loads the config: $CHANGEWARD_CONFIG, else changeward.yaml
 // in the working directory or a parent. A missing file yields an empty config.
 func Load() (*Config, error) {
-	if p := os.Getenv("CHANGEGATE_CONFIG"); p != "" {
+	if p := os.Getenv("CHANGEWARD_CONFIG"); p != "" {
 		c, err := LoadFile(p)
 		if errors.Is(err, fs.ErrNotExist) {
 			// Not created yet (e.g. before the first connect): Save writes it here.
@@ -176,7 +176,7 @@ func (c *Config) Validate() error {
 	return nil
 }
 
-// Save writes the config back to its path (or Dir/changegate.yaml).
+// Save writes the config back to its path (or Dir/changeward.yaml).
 func (c *Config) Save() error {
 	path := c.Path
 	if path == "" {
@@ -195,7 +195,7 @@ func (c *Config) Save() error {
 
 // StorePath returns the SQLite store location.
 func (c *Config) StorePath() string {
-	if p := os.Getenv("CHANGEGATE_STORE"); p != "" {
+	if p := os.Getenv("CHANGEWARD_STORE"); p != "" {
 		return p
 	}
 	if c.Store != "" {
@@ -204,15 +204,15 @@ func (c *Config) StorePath() string {
 		}
 		return filepath.Join(c.Dir, c.Store)
 	}
-	return filepath.Join(c.Dir, ".changegate", "changegate.db")
+	return filepath.Join(c.Dir, ".changeward", "changeward.db")
 }
 
-// StateDir is where Changegate keeps local state (checkpoints, dumps).
+// StateDir is where Changeward keeps local state (checkpoints, dumps).
 func (c *Config) StateDir() string { return filepath.Dir(c.StorePath()) }
 
 // PolicyPath returns the policy file path, or "" for built-in defaults only.
 func (c *Config) PolicyPath() string {
-	if p := os.Getenv("CHANGEGATE_POLICY"); p != "" {
+	if p := os.Getenv("CHANGEWARD_POLICY"); p != "" {
 		return p
 	}
 	if c.Policy != "" {
@@ -221,7 +221,7 @@ func (c *Config) PolicyPath() string {
 		}
 		return filepath.Join(c.Dir, c.Policy)
 	}
-	p := filepath.Join(c.Dir, "changegate.policy.yaml")
+	p := filepath.Join(c.Dir, "changeward.policy.yaml")
 	if _, err := os.Stat(p); err == nil {
 		return p
 	}
@@ -237,7 +237,7 @@ func (c *Config) TTL() time.Duration {
 }
 
 // ErrNoTarget is returned when no target can be resolved.
-var ErrNoTarget = errors.New("no target: pass --target, set default_target, or run `changegate connect`")
+var ErrNoTarget = errors.New("no target: pass --target, set default_target, or run `changeward connect`")
 
 // Resolve returns the named target as an adapter.Target with secrets expanded.
 // An empty name resolves the default (or the only) target.

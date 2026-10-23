@@ -8,7 +8,7 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/srawlin/changegate/pkg/adapter"
+	"github.com/srawlin/changeward/pkg/adapter"
 )
 
 // redactor hides values in plans shown to agents. Columns matching a

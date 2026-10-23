@@ -1,4 +1,4 @@
-// Package terraform is the Changegate adapter for Terraform and OpenTofu.
+// Package terraform is the Changeward adapter for Terraform and OpenTofu.
 //
 // Plan runs `terraform plan -out` and classifies every resource change
 // (create, update in place, replace, destroy). Destroying or replacing a
@@ -30,7 +30,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/srawlin/changegate/pkg/adapter"
+	"github.com/srawlin/changeward/pkg/adapter"
 )
 
 // StatefulTypes are resource types whose destruction loses data.
@@ -210,7 +210,7 @@ type planData struct {
 	Changes    []Change          `json:"changes"`
 	ConfigSnap map[string]string `json:"config_snapshot"` // configuration being applied
 	// Before is the configuration of the infrastructure before this change:
-	// the last configuration Changegate applied in this directory, else the
+	// the last configuration Changeward applied in this directory, else the
 	// files at git HEAD. EmptyState means nothing was deployed (undo = destroy).
 	Before     map[string]string `json:"before,omitempty"`
 	BeforeFrom string            `json:"before_from,omitempty"`
@@ -228,7 +228,7 @@ func (a *Adapter) priorConfig(ctx context.Context, dir string, current map[strin
 	if b, err := os.ReadFile(a.lastAppliedPath(dir)); err == nil {
 		var m map[string]string
 		if json.Unmarshal(b, &m) == nil {
-			return m, "last apply through Changegate"
+			return m, "last apply through Changeward"
 		}
 	}
 	out := map[string]string{}
@@ -338,7 +338,7 @@ func (a *Adapter) Plan(ctx context.Context, t adapter.Target, op adapter.Operati
 	}
 	if before == nil && !emptyState && rev != adapter.Irreversible {
 		rev = adapter.CheckpointOnly
-		warnings = append(warnings, "the configuration the current infrastructure was built from is unknown (no previous Changegate apply, not in git); undo needs a state backup")
+		warnings = append(warnings, "the configuration the current infrastructure was built from is unknown (no previous Changeward apply, not in git); undo needs a state backup")
 	}
 	cls, _ := a.Classify(ctx, t, op)
 	for _, c := range changes {

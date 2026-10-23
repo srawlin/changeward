@@ -1,6 +1,6 @@
 // Package migrations detects database migration frameworks in a repository,
 // reads their migrations (up and, where the framework has them, down), and
-// writes new migrations for `changegate promote`.
+// writes new migrations for `changeward promote`.
 package migrations
 
 import (
@@ -42,7 +42,7 @@ type Migration struct {
 	UpSQL     string `json:"-"`
 	DownSQL   string `json:"-"`
 	HasDown   bool   `json:"has_down"`
-	// SQL reports whether Changegate can execute the migration itself.
+	// SQL reports whether Changeward can execute the migration itself.
 	// Code-based migrations (Rails, Django, Alembic) need their runtime.
 	SQL bool `json:"sql"`
 	// NoTransaction is set for migrations that must not run in a transaction.
@@ -57,7 +57,7 @@ type Set struct {
 	Notes      []string    `json:"notes,omitempty"`
 }
 
-var skipDirs = map[string]bool{".git": true, "node_modules": true, "vendor": true, ".venv": true, "venv": true, "__pycache__": true, "dist": true, "build": true, "target": true, ".changegate": true}
+var skipDirs = map[string]bool{".git": true, "node_modules": true, "vendor": true, ".venv": true, "venv": true, "__pycache__": true, "dist": true, "build": true, "target": true, ".changeward": true}
 
 var (
 	reFlyway    = regexp.MustCompile(`^([VU])(\d+(?:[._]\d+)*)__(.+)\.sql$`)

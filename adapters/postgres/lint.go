@@ -22,7 +22,7 @@ type rule struct {
 var lintRules = map[string]rule{
 	FlagDeleteWithoutWhere: {"error", "DELETE without WHERE removes every row", "Add a WHERE clause, or use TRUNCATE deliberately in a reviewed migration."},
 	FlagUpdateWithoutWhere: {"error", "UPDATE without WHERE rewrites every row", "Add a WHERE clause; for backfills, batch by primary key range."},
-	FlagDropTable:          {"error", "DROP TABLE destroys the table and its data", "Expand/contract: stop reading and writing the table in one release, drop it in a later one. In the direct lane Changegate soft-drops into _changegate_trash."},
+	FlagDropTable:          {"error", "DROP TABLE destroys the table and its data", "Expand/contract: stop reading and writing the table in one release, drop it in a later one. In the direct lane Changeward soft-drops into _changeward_trash."},
 	FlagDropColumn:         {"error", "DROP COLUMN destroys the column's data and breaks code still reading it", "Expand/contract: stop using the column, deploy, then drop it in a later release."},
 	FlagDropSchema:         {"error", "DROP SCHEMA destroys every object in the schema", ""},
 	FlagDropDatabase:       {"error", "DROP DATABASE destroys the database", ""},
@@ -47,7 +47,7 @@ var lintRules = map[string]rule{
 	FlagMultiTable:         {"info", "Multi-table DML (FROM/USING) is harder to preview exactly on older Postgres", ""},
 	FlagWithClause:         {"info", "Data-modifying statement inside a WITH clause", ""},
 	FlagUpsert:             {"info", "INSERT ... ON CONFLICT may update existing rows", ""},
-	FlagTxControl:          {"error", "Transaction control statements are managed by Changegate and not allowed in a change", "Submit the statements without BEGIN/COMMIT; each change runs in its own transaction."},
+	FlagTxControl:          {"error", "Transaction control statements are managed by Changeward and not allowed in a change", "Submit the statements without BEGIN/COMMIT; each change runs in its own transaction."},
 	FlagSessionSetting:     {"info", "SET changes session settings", ""},
 	FlagCodeBlock:          {"error", "DO blocks run arbitrary code that cannot be previewed or undone", "Write the change as plain SQL statements."},
 	FlagProcedureCall:      {"error", "CALL runs a procedure whose effects cannot be previewed or undone", ""},
@@ -55,7 +55,7 @@ var lintRules = map[string]rule{
 	FlagHeavyLock:          {"warning", "Takes a heavy lock or rewrites the table", "Schedule in a maintenance window."},
 	FlagServerFile:         {"error", "Reads or writes server files or runs programs", ""},
 	FlagDisablesTriggers:   {"error", "Disables triggers (and with session_replication_role, foreign keys)", ""},
-	FlagUnparsed:           {"warning", "Statement type is not analyzed by Changegate", ""},
+	FlagUnparsed:           {"warning", "Statement type is not analyzed by Changeward", ""},
 }
 
 // Lint returns human-readable findings for parsed statements.

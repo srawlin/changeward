@@ -1,7 +1,7 @@
-# Changegate Change Record specification, v0
+# Changeward Change Record specification, v0
 
-Status: draft (v0). Wire format: [`proto/changegate/v1/change.proto`](../proto/changegate/v1/change.proto) and
-[`adapter.proto`](../proto/changegate/v1/adapter.proto). JSON form: [`schemas/change-record.schema.json`](schemas/change-record.schema.json).
+Status: draft (v0). Wire format: [`proto/changeward/v1/change.proto`](../proto/changeward/v1/change.proto) and
+[`adapter.proto`](../proto/changeward/v1/adapter.proto). JSON form: [`schemas/change-record.schema.json`](schemas/change-record.schema.json).
 
 The Change Record describes one agent-originated change, whether it arrives as a pull request (Lane A, CI/CD) or as
 a live action through MCP, a hook or an SDK (Lane B, direct), together with its evidence, approvals and undo
@@ -64,9 +64,9 @@ store also refuses `UPDATE` and `DELETE` on events.
 
 `Describe`, `Classify`, `Plan` are required; `Apply`, `Verify`, `Undo`, `Rehearse`, `Checkpoint`, `Restore`,
 `ProvisionCopy` are optional and declared in `AdapterInfo.capabilities`. Adapters run out of process over gRPC
-(hashicorp/go-plugin handshake `CHANGEGATE_ADAPTER_PLUGIN`). The conformance suite (`changegate adapter test`)
+(hashicorp/go-plugin handshake `CHANGEWARD_ADAPTER_PLUGIN`). The conformance suite (`changeward adapter test`)
 proves that Plan is side-effect free and hashed, that Apply → Undo restores identical state across a generated
 corpus (per operation and as a whole-sequence rewind), that stale plans and stale undos are refused, and that
 checkpoints restore. Out-of-process adapters take part through two Plan conventions: operation kind
-`changegate.fingerprint` returns `facts.fingerprint`, and `changegate.corpus` (params `seed`, `n`) returns
+`changeward.fingerprint` returns `facts.fingerprint`, and `changeward.corpus` (params `seed`, `n`) returns
 `facts.corpus`, a JSON list of operations.

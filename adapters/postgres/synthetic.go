@@ -54,7 +54,7 @@ func GenerateSynthetic(ctx context.Context, conn *pgx.Conn, perTable int64, coun
 		if !ok {
 			continue
 		}
-		if _, err := conn.Exec(ctx, "SAVEPOINT cg_syn"); err != nil {
+		if _, err := conn.Exec(ctx, "SAVEPOINT cw_syn"); err != nil {
 			// Not in a transaction: run directly.
 			if tag, err := conn.Exec(ctx, sql); err == nil {
 				total += tag.RowsAffected()
@@ -64,7 +64,7 @@ func GenerateSynthetic(ctx context.Context, conn *pgx.Conn, perTable int64, coun
 		if tag, err := conn.Exec(ctx, sql); err == nil {
 			total += tag.RowsAffected()
 		} else {
-			_, _ = conn.Exec(ctx, "ROLLBACK TO SAVEPOINT cg_syn")
+			_, _ = conn.Exec(ctx, "ROLLBACK TO SAVEPOINT cw_syn")
 		}
 	}
 	_, _ = conn.Exec(ctx, "ANALYZE")

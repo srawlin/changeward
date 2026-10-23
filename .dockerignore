@@ -1,5 +1,5 @@
 bin/
 dist/
 .git/
-.changegate/
+.changeward/
 **/node_modules/

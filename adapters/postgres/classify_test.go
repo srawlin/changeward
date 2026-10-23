@@ -4,7 +4,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/srawlin/changegate/pkg/adapter"
+	"github.com/srawlin/changeward/pkg/adapter"
 )
 
 func TestClassify(t *testing.T) {
