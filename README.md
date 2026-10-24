@@ -168,6 +168,7 @@ The details are in [docs/concepts.md](docs/concepts.md) and [docs/policy.md](doc
 | [Shared executor](docs/executor.md) and [gateways](docs/gateways.md) | Team deployment, tokens, Helm, Envoy/agentgateway/ContextForge |
 | [CLI reference](docs/cli.md) | Every command and flag |
 | [Status](docs/m2-status.md) | What is done and verified, and the known gaps |
+| [Backlog](docs/backlog.md) | Agreed work that is not scheduled yet |
 
 ## Demo and benchmark
 
