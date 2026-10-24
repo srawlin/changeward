@@ -8,7 +8,7 @@ import (
 	"testing"
 
 	"github.com/jackc/pgx/v5"
-	"github.com/srawlin/changegate/pkg/adapter"
+	"github.com/srawlin/changeward/pkg/adapter"
 )
 
 func newA(t *testing.T) *Adapter {

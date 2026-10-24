@@ -33,10 +33,10 @@ for name in ("mcpgateway", "mcpgateway.plugins"):
     sys.modules[name] = types.ModuleType(name)
 sys.modules["mcpgateway.plugins.framework"] = fw
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
-from changegate_contextforge.plugin import ChangegatePlugin  # noqa: E402
+from changeward_contextforge.plugin import ChangewardPlugin  # noqa: E402
 
-BIN = os.environ.get("CHANGEGATE_BIN", os.path.join(os.path.dirname(__file__), "..", "..", "..", "bin", "changegate"))
-TOKEN = "cgx_contextforge_test"
+BIN = os.environ.get("CHANGEWARD_BIN", os.path.join(os.path.dirname(__file__), "..", "..", "..", "bin", "changeward"))
+TOKEN = "cwx_contextforge_test"
 
 
 class PluginTest(unittest.TestCase):
@@ -48,10 +48,10 @@ class PluginTest(unittest.TestCase):
         port = s.getsockname()[1]
         s.close()
         cfg = {"targets": {}, "executor": {"tokens": [{"name": "gateway", "sha256": hashlib.sha256(TOKEN.encode()).hexdigest(), "roles": ["propose"]}]}}
-        p = os.path.join(d, "changegate.yaml")
+        p = os.path.join(d, "changeward.yaml")
         with open(p, "w") as f:
             json.dump(cfg, f)
-        cls.proc = subprocess.Popen([BIN, "executor", "serve", "--addr", f"127.0.0.1:{port}"], env=dict(os.environ, CHANGEGATE_CONFIG=p), stderr=subprocess.DEVNULL)
+        cls.proc = subprocess.Popen([BIN, "executor", "serve", "--addr", f"127.0.0.1:{port}"], env=dict(os.environ, CHANGEWARD_CONFIG=p), stderr=subprocess.DEVNULL)
         cls.url = f"http://127.0.0.1:{port}"
         for _ in range(100):
             try:
@@ -59,7 +59,7 @@ class PluginTest(unittest.TestCase):
                 break
             except OSError:
                 time.sleep(0.1)
-        os.environ["CHANGEGATE_GATEWAY_TOKEN"] = TOKEN
+        os.environ["CHANGEWARD_GATEWAY_TOKEN"] = TOKEN
 
     @classmethod
     def tearDownClass(cls):
@@ -67,7 +67,7 @@ class PluginTest(unittest.TestCase):
         cls.proc.wait(5)
 
     def run_tool(self, name, args):
-        plugin = ChangegatePlugin(_Obj(config={"executor_url": self.url, "env": "prod"}))
+        plugin = ChangewardPlugin(_Obj(config={"executor_url": self.url, "env": "prod"}))
         ctx = _Obj(global_context=_Obj(server_id="pg", user="agent-1"))
         return asyncio.run(plugin.tool_pre_invoke(_Obj(name=name, args=args), ctx))
 
@@ -75,7 +75,7 @@ class PluginTest(unittest.TestCase):
         self.assertTrue(self.run_tool("execute_sql", {"sql": "SELECT 1"}).continue_processing)
         r = self.run_tool("execute_sql", {"sql": "DROP TABLE users"})
         self.assertFalse(r.continue_processing)
-        self.assertIn("Changegate", r.violation.description)
+        self.assertIn("Changeward", r.violation.description)
         self.assertFalse(self.run_tool("send_email", {"to": "ceo"}).continue_processing)
 
 

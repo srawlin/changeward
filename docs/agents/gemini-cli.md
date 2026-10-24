@@ -1,6 +1,6 @@
 # Gemini CLI
 
-Changegate adds an MCP server and a `BeforeTool` hook on `run_shell_command` to Gemini CLI's project settings.
+Changeward adds an MCP server and a `BeforeTool` hook on `run_shell_command` to Gemini CLI's project settings.
 
 **Verified:** Gemini CLI 0.64, headless (`gemini -p --yolo`). The MCP tools applied a reversible `UPDATE`.
 With every tool call auto-approved by `--yolo`, the hook still blocked a raw `psql DELETE`.
@@ -8,8 +8,8 @@ With every tool call auto-approved by `--yolo`, the hook still blocked a raw `ps
 ## Set up
 
 ```sh
-changegate connect app --dsn '${DATABASE_URL}' --env personal
-changegate install gemini
+changeward connect app --dsn '${DATABASE_URL}' --env personal
+changeward install gemini
 ```
 
 `.gemini/settings.json` (merged):
@@ -17,21 +17,21 @@ changegate install gemini
 ```json
 {
   "mcpServers": {
-    "changegate": {
-      "command": "/usr/local/bin/changegate",
+    "changeward": {
+      "command": "/usr/local/bin/changeward",
       "args": ["mcp", "postgres", "--target", "app"],
-      "env": { "CHANGEGATE_AGENT": "gemini-cli" }
+      "env": { "CHANGEWARD_AGENT": "gemini-cli" }
     }
   },
   "hooks": {
     "BeforeTool": [
-      { "matcher": "run_shell_command", "hooks": [{ "type": "command", "command": "/usr/local/bin/changegate hook gemini" }] }
+      { "matcher": "run_shell_command", "hooks": [{ "type": "command", "command": "/usr/local/bin/changeward hook gemini" }] }
     ]
   }
 }
 ```
 
-The hook answers `{"decision": "deny", "reason": "Changegate: …"}` with exit code 0, which is the form Gemini CLI
+The hook answers `{"decision": "deny", "reason": "Changeward: …"}` with exit code 0, which is the form Gemini CLI
 prefers. An exit code of 2 would show up as a "failed" hook.
 
 ## Use it
@@ -48,5 +48,5 @@ warning listing them; that's expected.
 ## Troubleshooting
 
 - **"Approval mode overridden… folder is not trusted":** see above.
-- **The hook didn't fire:** the model may have refused on its own after reading the Changegate server's
-  instructions. That's fine. `changegate audit log` shows `hook.deny` events whenever the hook does block.
+- **The hook didn't fire:** the model may have refused on its own after reading the Changeward server's
+  instructions. That's fine. `changeward audit log` shows `hook.deny` events whenever the hook does block.

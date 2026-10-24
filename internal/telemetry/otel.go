@@ -21,7 +21,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/srawlin/changegate/internal/model"
+	"github.com/srawlin/changeward/internal/model"
 )
 
 // Exporter sends spans to an OTLP/HTTP endpoint.
@@ -41,7 +41,7 @@ func NewExporter(endpoint string, headers map[string]string) *Exporter {
 	if endpoint == "" {
 		return nil
 	}
-	return &Exporter{Endpoint: strings.TrimRight(endpoint, "/"), Headers: headers, Service: "changegate",
+	return &Exporter{Endpoint: strings.TrimRight(endpoint, "/"), Headers: headers, Service: "changeward",
 		Client: &http.Client{Timeout: 5 * time.Second}, start: map[string]time.Time{}, last: map[string]time.Time{}}
 }
 
@@ -91,24 +91,24 @@ type span struct {
 }
 
 func attrs(c *model.Change) []kv {
-	out := []kv{attr("changegate.change_id", c.ID), attr("changegate.state", string(c.State)), attr("changegate.target", c.Target.Name),
-		attr("changegate.env", c.Target.Env), attr("changegate.adapter", c.Target.Adapter), attr("changegate.lane", c.Provenance.Lane),
-		attr("changegate.principal.kind", c.Principal.Kind)}
+	out := []kv{attr("changeward.change_id", c.ID), attr("changeward.state", string(c.State)), attr("changeward.target", c.Target.Name),
+		attr("changeward.env", c.Target.Env), attr("changeward.adapter", c.Target.Adapter), attr("changeward.lane", c.Provenance.Lane),
+		attr("changeward.principal.kind", c.Principal.Kind)}
 	if c.SessionID != "" {
-		out = append(out, attr("changegate.session_id", c.SessionID))
+		out = append(out, attr("changeward.session_id", c.SessionID))
 	}
 	if c.Principal.Agent != "" {
-		out = append(out, attr("changegate.principal.agent", c.Principal.Agent))
+		out = append(out, attr("changeward.principal.agent", c.Principal.Agent))
 	}
 	if c.Plan != nil {
-		out = append(out, attr("changegate.plan_id", c.Plan.ID), attr("changegate.reversibility", string(c.Plan.Reversibility)),
-			attr("changegate.destructive", c.Plan.Destructive), attr("changegate.blast_rows", c.Plan.BlastRows))
+		out = append(out, attr("changeward.plan_id", c.Plan.ID), attr("changeward.reversibility", string(c.Plan.Reversibility)),
+			attr("changeward.destructive", c.Plan.Destructive), attr("changeward.blast_rows", c.Plan.BlastRows))
 	}
 	if c.Decision != nil {
-		out = append(out, attr("changegate.decision", c.Decision.Decision))
+		out = append(out, attr("changeward.decision", c.Decision.Decision))
 	}
 	if c.Receipt != nil {
-		out = append(out, attr("changegate.rows_affected", c.Receipt.RowsAffected))
+		out = append(out, attr("changeward.rows_affected", c.Receipt.RowsAffected))
 	}
 	return out
 }
@@ -138,8 +138,8 @@ func (x *Exporter) Observe(ctx context.Context, c *model.Change, from, to model.
 	x.mu.Unlock()
 
 	tid := traceID(c.ID)
-	s := span{TraceID: tid, SpanID: randomSpanID(), ParentSpanID: rootSpanID(c.ID), Name: "changegate." + string(to), Kind: 1,
-		Start: fmt.Sprint(prev.UnixNano()), End: fmt.Sprint(now.UnixNano()), Attributes: append(attrs(c), attr("changegate.from_state", string(from)))}
+	s := span{TraceID: tid, SpanID: randomSpanID(), ParentSpanID: rootSpanID(c.ID), Name: "changeward." + string(to), Kind: 1,
+		Start: fmt.Sprint(prev.UnixNano()), End: fmt.Sprint(now.UnixNano()), Attributes: append(attrs(c), attr("changeward.from_state", string(from)))}
 	if to == model.Failed {
 		s.Status.Code = 2
 	}
@@ -147,7 +147,7 @@ func (x *Exporter) Observe(ctx context.Context, c *model.Change, from, to model.
 	if terminal {
 		// (Re)emit the root span covering the whole lifecycle so far; backends
 		// keep the latest version by span ID.
-		root := span{TraceID: tid, SpanID: rootSpanID(c.ID), Name: "changegate.change " + c.Target.Name, Kind: 1,
+		root := span{TraceID: tid, SpanID: rootSpanID(c.ID), Name: "changeward.change " + c.Target.Name, Kind: 1,
 			Start: fmt.Sprint(first.UnixNano()), End: fmt.Sprint(now.UnixNano()), Attributes: attrs(c)}
 		if to == model.Failed || to == model.Rejected {
 			root.Status.Code = 2
@@ -164,7 +164,7 @@ func (x *Exporter) Observe(ctx context.Context, c *model.Change, from, to model.
 func (x *Exporter) send(ctx context.Context, spans []span) error {
 	payload := map[string]any{"resourceSpans": []any{map[string]any{
 		"resource":   map[string]any{"attributes": []kv{attr("service.name", x.Service)}},
-		"scopeSpans": []any{map[string]any{"scope": map[string]any{"name": "changegate"}, "spans": spans}},
+		"scopeSpans": []any{map[string]any{"scope": map[string]any{"name": "changeward"}, "spans": spans}},
 	}}}
 	b, _ := json.Marshal(payload)
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, x.Endpoint+"/v1/traces", bytes.NewReader(b))

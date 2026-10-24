@@ -6,8 +6,8 @@ LDFLAGS := -s -w -X main.version=$(VERSION)
 .PHONY: build test test-short lint proto pg clean
 
 build:
-	go build -ldflags "$(LDFLAGS)" -o bin/changegate ./cmd/changegate
-	go build -o bin/changegate-adapter-toykv ./adapters/toykv/cmd/changegate-adapter-toykv
+	go build -ldflags "$(LDFLAGS)" -o bin/changeward ./cmd/changeward
+	go build -o bin/changeward-adapter-toykv ./adapters/toykv/cmd/changeward-adapter-toykv
 
 test:
 	go test ./...
@@ -20,7 +20,7 @@ lint:
 
 proto:
 	protoc -I proto --go_out=gen --go_opt=paths=source_relative \
-	  --go-grpc_out=gen --go-grpc_opt=paths=source_relative proto/changegate/v1/*.proto
+	  --go-grpc_out=gen --go-grpc_opt=paths=source_relative proto/changeward/v1/*.proto
 
 pg:
 	./scripts/test-pg.sh

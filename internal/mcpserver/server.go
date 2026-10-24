@@ -1,5 +1,5 @@
-// Package mcpserver is Changegate's own MCP server for an adapter
-// (`changegate mcp postgres`). It gives agents plan → approve → apply → undo
+// Package mcpserver is Changeward's own MCP server for an adapter
+// (`changeward mcp postgres`). It gives agents plan → approve → apply → undo
 // tools instead of raw SQL execution. The server holds the credentials; the
 // agent never sees them.
 package mcpserver
@@ -13,19 +13,19 @@ import (
 	"sync"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
-	"github.com/srawlin/changegate/adapters/postgres"
-	"github.com/srawlin/changegate/internal/backend"
-	"github.com/srawlin/changegate/internal/engine"
-	"github.com/srawlin/changegate/internal/model"
-	"github.com/srawlin/changegate/internal/policy"
-	"github.com/srawlin/changegate/internal/session"
-	"github.com/srawlin/changegate/pkg/adapter"
+	"github.com/srawlin/changeward/adapters/postgres"
+	"github.com/srawlin/changeward/internal/backend"
+	"github.com/srawlin/changeward/internal/engine"
+	"github.com/srawlin/changeward/internal/model"
+	"github.com/srawlin/changeward/internal/policy"
+	"github.com/srawlin/changeward/internal/session"
+	"github.com/srawlin/changeward/pkg/adapter"
 )
 
 // Querier runs read-only queries (implemented by the SQL adapters).
 type Querier = adapter.Querier
 
-// Server is the Changegate MCP server for one target.
+// Server is the Changeward MCP server for one target.
 type Server struct {
 	// Backend, if set, is where changes are made (e.g. a shared executor).
 	// Otherwise a local backend is built from Engine and Sessions.
@@ -71,8 +71,8 @@ func (s *Server) Run(ctx context.Context) error {
 
 // New builds the MCP server (exposed for tests and other transports).
 func (s *Server) New() *mcp.Server {
-	srv := mcp.NewServer(&mcp.Implementation{Name: "changegate", Title: "Changegate", Version: s.Version}, &mcp.ServerOptions{
-		Instructions: `Changegate guards this database. Read with "query". To change anything, call "propose_change" with SQL: ` +
+	srv := mcp.NewServer(&mcp.Implementation{Name: "changeward", Title: "Changeward", Version: s.Version}, &mcp.ServerOptions{
+		Instructions: `Changeward guards this database. Read with "query". To change anything, call "propose_change" with SQL: ` +
 			`it returns an exact preview (rows affected, before/after values, locks, reversibility) and a policy decision without ` +
 			`changing data. Then call "apply_change" with the plan_id. If approval is pending, tell the user and poll ` +
 			`"get_change_status" or continue other work; do not try to bypass it. Every applied change can be undone with "undo_change"; ` +
@@ -107,7 +107,7 @@ func (s *Server) agentName(req *mcp.CallToolRequest) string {
 	if s.agent != "" {
 		return s.agent
 	}
-	name := os.Getenv("CHANGEGATE_AGENT")
+	name := os.Getenv("CHANGEWARD_AGENT")
 	if req != nil && req.Session != nil {
 		if p := req.Session.InitializeParams(); p != nil && p.ClientInfo != nil && p.ClientInfo.Name != "" {
 			name = p.ClientInfo.Name
@@ -230,21 +230,21 @@ func (s *Server) listTables(ctx context.Context, req *mcp.CallToolRequest, _ Emp
 		return s.query(ctx, req, QueryIn{MaxRows: 1000, SQL: `SELECT CONCAT(t.TABLE_SCHEMA, '.', t.TABLE_NAME) AS table_name, t.TABLE_ROWS AS approx_rows,
 			GROUP_CONCAT(CONCAT(c.COLUMN_NAME, ' ', c.COLUMN_TYPE) ORDER BY c.ORDINAL_POSITION SEPARATOR ', ') AS columns
 			FROM information_schema.TABLES t JOIN information_schema.COLUMNS c ON c.TABLE_SCHEMA = t.TABLE_SCHEMA AND c.TABLE_NAME = t.TABLE_NAME
-			WHERE t.TABLE_SCHEMA = DATABASE() AND c.COLUMN_NAME NOT LIKE '\_cg\_%' GROUP BY t.TABLE_SCHEMA, t.TABLE_NAME, t.TABLE_ROWS ORDER BY 1`})
+			WHERE t.TABLE_SCHEMA = DATABASE() AND c.COLUMN_NAME NOT LIKE '\_cw\_%' GROUP BY t.TABLE_SCHEMA, t.TABLE_NAME, t.TABLE_ROWS ORDER BY 1`})
 	}
 	return s.query(ctx, req, QueryIn{MaxRows: 1000, SQL: `SELECT n.nspname || '.' || c.relname AS table_name,
 		  greatest(c.reltuples, 0)::bigint AS approx_rows,
 		  string_agg(a.attname || ' ' || format_type(a.atttypid, a.atttypmod), ', ' ORDER BY a.attnum) AS columns
 		FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace
-		JOIN pg_attribute a ON a.attrelid = c.oid AND a.attnum > 0 AND NOT a.attisdropped AND a.attname NOT LIKE '\_cg\_%'
-		WHERE c.relkind IN ('r','p','v','m') AND n.nspname NOT IN ('pg_catalog','information_schema','_changegate_trash') AND n.nspname NOT LIKE 'pg_%'
+		JOIN pg_attribute a ON a.attrelid = c.oid AND a.attnum > 0 AND NOT a.attisdropped AND a.attname NOT LIKE '\_cw\_%'
+		WHERE c.relkind IN ('r','p','v','m') AND n.nspname NOT IN ('pg_catalog','information_schema','_changeward_trash') AND n.nspname NOT LIKE 'pg_%'
 		GROUP BY 1, 2 ORDER BY 1`})
 }
 
 // ProposeIn is the input of propose_change.
 type ProposeIn struct {
 	SQL    string `json:"sql" jsonschema:"the SQL to run; several statements are applied together in one transaction"`
-	Intent string `json:"intent,omitempty" jsonschema:"what the user asked for, in their words (Changegate checks that the effect matches it)"`
+	Intent string `json:"intent,omitempty" jsonschema:"what the user asked for, in their words (Changeward checks that the effect matches it)"`
 }
 
 // ChangeOut is the structured result of change tools.
@@ -275,9 +275,9 @@ func out(c *model.Change) ChangeOut {
 		o.Next = "call apply_change with plan_id " + o.PlanID
 	case model.AwaitingApproval:
 		if c.Decision != nil && c.Decision.Channel == policy.ChannelInline {
-			o.Next = "call apply_change; the user will be asked to confirm (or they can run: changegate approve " + o.PlanID + ")"
+			o.Next = "call apply_change; the user will be asked to confirm (or they can run: changeward approve " + o.PlanID + ")"
 		} else {
-			o.Next = "approval required out of band (Slack, web or `changegate approve " + o.PlanID + "` by someone other than the proposer); poll get_change_status"
+			o.Next = "approval required out of band (Slack, web or `changeward approve " + o.PlanID + "` by someone other than the proposer); poll get_change_status"
 		}
 	case model.Rejected:
 		o.Next = "denied by policy; do not retry the same change"
@@ -313,8 +313,8 @@ func (s *Server) propose(ctx context.Context, req *mcp.CallToolRequest, in Propo
 // third-party "execute SQL" tool and expects execution.
 func (s *Server) ProposeAndApply(ctx context.Context, req *mcp.CallToolRequest, sql, intent string) (*mcp.CallToolResult, error) {
 	// On a multi-round-trip retry the change was already proposed.
-	if st := req.Params.RequestState; strings.HasPrefix(st, "changegate:") {
-		r, _, err := s.apply(ctx, req, RefIn{PlanID: strings.TrimPrefix(st, "changegate:")})
+	if st := req.Params.RequestState; strings.HasPrefix(st, "changeward:") {
+		r, _, err := s.apply(ctx, req, RefIn{PlanID: strings.TrimPrefix(st, "changeward:")})
 		return r, err
 	}
 	r, o, err := s.propose(ctx, req, ProposeIn{SQL: sql, Intent: intent})
@@ -326,7 +326,7 @@ func (s *Server) ProposeAndApply(ctx context.Context, req *mcp.CallToolRequest, 
 		return nil, err
 	}
 	if ar.InputRequests != nil {
-		ar.RequestState = "changegate:" + o.PlanID
+		ar.RequestState = "changeward:" + o.PlanID
 		return ar, nil
 	}
 	if ao.State == string(model.Verified) || ao.State == string(model.Applied) {
@@ -345,13 +345,13 @@ func planText(r *mcp.CallToolResult) string {
 	return ""
 }
 
-// AddChangegateTools registers the change-management tools on another
+// AddChangewardTools registers the change-management tools on another
 // server (proxy mode), with a name prefix.
-func (s *Server) AddChangegateTools(srv *mcp.Server, prefix string) {
+func (s *Server) AddChangewardTools(srv *mcp.Server, prefix string) {
 	t, f := true, false
-	mcp.AddTool(srv, &mcp.Tool{Name: prefix + "apply_change", Description: "Apply a pending Changegate change by plan_id (after approval).",
+	mcp.AddTool(srv, &mcp.Tool{Name: prefix + "apply_change", Description: "Apply a pending Changeward change by plan_id (after approval).",
 		Annotations: &mcp.ToolAnnotations{Title: "Apply change", DestructiveHint: &t, OpenWorldHint: &f}}, s.apply)
-	mcp.AddTool(srv, &mcp.Tool{Name: prefix + "get_change_status", Description: "Get the state of a Changegate change.",
+	mcp.AddTool(srv, &mcp.Tool{Name: prefix + "get_change_status", Description: "Get the state of a Changeward change.",
 		Annotations: &mcp.ToolAnnotations{ReadOnlyHint: true, OpenWorldHint: &f}}, s.status)
 	mcp.AddTool(srv, &mcp.Tool{Name: prefix + "undo_change", Description: "Undo a change made through this proxy (change_id, plan_id or session step).",
 		Annotations: &mcp.ToolAnnotations{DestructiveHint: &t, OpenWorldHint: &f}}, s.undo)
@@ -405,7 +405,7 @@ func (s *Server) apply(ctx context.Context, req *mcp.CallToolRequest, in RefIn) 
 		}
 		if !asked {
 			o := out(c)
-			return text("pending approval: this client cannot ask the user inline. Ask the user to run `changegate approve %s`, then call apply_change again.", c.Plan.ID), o, nil
+			return text("pending approval: this client cannot ask the user inline. Ask the user to run `changeward approve %s`, then call apply_change again.", c.Plan.ID), o, nil
 		}
 		if c, err = s.be().ApproveInline(ctx, c.ID, c.Plan.Hash, approved, "mcp-elicitation"); err != nil {
 			return toolError(err)
@@ -436,7 +436,7 @@ func (s *Server) apply(ctx context.Context, req *mcp.CallToolRequest, in RefIn) 
 	return text("applied %s: %d rows, %s, verified%s\nundo: undo_change %s", c.ID, c.Receipt.RowsAffected, c.Receipt.Output, notes, c.ID), o, nil
 }
 
-const approveInputKey = "changegate_approve"
+const approveInputKey = "changeward_approve"
 
 // elicit asks the user to confirm a change through the MCP client, using a
 // multi-round-trip input request (SEP-2322; the SDK falls back to a classic
@@ -464,7 +464,7 @@ func (s *Server) elicit(req *mcp.CallToolRequest, c *model.Change) (approved, as
 		reason = strings.Join(c.Decision.Reasons, "; ")
 	}
 	return false, false, &mcp.CallToolResult{InputRequests: mcp.InputRequestMap{approveInputKey: &mcp.ElicitParams{
-		Message: fmt.Sprintf("Changegate: approve this change?\n\n%s\n%s", c.Plan.Diff, reason),
+		Message: fmt.Sprintf("Changeward: approve this change?\n\n%s\n%s", c.Plan.Diff, reason),
 		RequestedSchema: map[string]any{
 			"type": "object",
 			"properties": map[string]any{
@@ -563,5 +563,5 @@ func (s *Server) checkpoint(ctx context.Context, req *mcp.CallToolRequest, in Ch
 	if err != nil {
 		return toolError(err)
 	}
-	return text("checkpoint %s taken; the user can restore it with `changegate restore %s --yes`", id, id), ChangeOut{}, nil
+	return text("checkpoint %s taken; the user can restore it with `changeward restore %s --yes`", id, id), ChangeOut{}, nil
 }

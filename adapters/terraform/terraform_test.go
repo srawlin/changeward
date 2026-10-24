@@ -9,7 +9,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/srawlin/changegate/pkg/adapter"
+	"github.com/srawlin/changeward/pkg/adapter"
 )
 
 func tfTarget(t *testing.T, main string) adapter.Target {
@@ -106,7 +106,7 @@ func TestUnknownPriorConfigIsCheckpointOnly(t *testing.T) {
 	if _, _, err := run(ctx, tg, "init", "-input=false"); err != nil {
 		t.Fatal(err)
 	}
-	if _, _, err := run(ctx, tg, "apply", "-auto-approve", "-input=false"); err != nil { // applied outside Changegate
+	if _, _, err := run(ctx, tg, "apply", "-auto-approve", "-input=false"); err != nil { // applied outside Changeward
 		t.Fatal(err)
 	}
 	_ = os.WriteFile(filepath.Join(tg.Config["dir"], "main.tf"), []byte(`resource "terraform_data" "x" { input = 2 }`), 0o644)

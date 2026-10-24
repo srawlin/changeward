@@ -6,7 +6,7 @@ import (
 	"strings"
 
 	pg "github.com/pganalyze/pg_query_go/v6"
-	"github.com/srawlin/changegate/pkg/adapter"
+	"github.com/srawlin/changeward/pkg/adapter"
 	"google.golang.org/protobuf/reflect/protoreflect"
 )
 

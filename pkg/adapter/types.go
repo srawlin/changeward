@@ -1,8 +1,8 @@
-// Package adapter defines the Changegate adapter contract in Go: the types
+// Package adapter defines the Changeward adapter contract in Go: the types
 // exchanged with adapters, the Adapter interface, and the go-plugin transport
 // used to run adapters out of process.
 //
-// The wire format is defined in proto/changegate/v1/adapter.proto. These Go
+// The wire format is defined in proto/changeward/v1/adapter.proto. These Go
 // types mirror it with JSON tags; they are what the engine and store use.
 package adapter
 

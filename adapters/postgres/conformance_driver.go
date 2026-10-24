@@ -7,8 +7,8 @@ import (
 	"time"
 
 	"github.com/jackc/pgx/v5"
-	"github.com/srawlin/changegate/conformance"
-	"github.com/srawlin/changegate/pkg/adapter"
+	"github.com/srawlin/changeward/conformance"
+	"github.com/srawlin/changeward/pkg/adapter"
 )
 
 // ConformanceFixture is the schema each conformance target starts from.
@@ -46,7 +46,7 @@ func ConformanceDriver(a *Adapter, adminDSN string, seed int64, n int) conforman
 				return adapter.Target{}, nil, err
 			}
 			defer func() { _ = c.Close(ctx) }()
-			name := fmt.Sprintf("cg_conformance_%d", time.Now().UnixNano())
+			name := fmt.Sprintf("cw_conformance_%d", time.Now().UnixNano())
 			if _, err := c.Exec(ctx, "CREATE DATABASE "+name); err != nil {
 				return adapter.Target{}, nil, err
 			}

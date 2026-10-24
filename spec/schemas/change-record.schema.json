@@ -1,7 +1,7 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://changegate.dev/schemas/v0/change-record.schema.json",
-  "title": "Changegate Change Record (v0)",
+  "$id": "https://changeward.dev/schemas/v0/change-record.schema.json",
+  "title": "Changeward Change Record (v0)",
   "type": "object",
   "required": ["id", "seq", "state", "principal", "provenance", "target", "operation", "created_at"],
   "properties": {

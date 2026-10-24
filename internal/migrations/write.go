@@ -23,7 +23,7 @@ type NewMigration struct {
 	Header []string
 }
 
-// Writable lists frameworks Changegate can write migrations for.
+// Writable lists frameworks Changeward can write migrations for.
 var Writable = []string{GolangMigrate, Goose, Flyway, Liquibase, Atlas, Prisma, Sqitch, Rails, Django, Alembic}
 
 var nonSlug = regexp.MustCompile(`[^a-z0-9]+`)
@@ -35,7 +35,7 @@ func Slug(s string) string {
 		s = strings.TrimRight(s[:50], "_")
 	}
 	if s == "" {
-		s = "changegate_promotion"
+		s = "changeward_promotion"
 	}
 	return s
 }
@@ -153,7 +153,7 @@ func Write(root, fw, dir string, set *Set, m NewMigration, now time.Time) ([]str
 		var b strings.Builder
 		b.WriteString("--liquibase formatted sql\n")
 		b.WriteString(header(m.Header, "-- "))
-		fmt.Fprintf(&b, "--changeset changegate:%s-%s\n%s", now.UTC().Format("20060102150405"), name, up)
+		fmt.Fprintf(&b, "--changeset changeward:%s-%s\n%s", now.UTC().Format("20060102150405"), name, up)
 		for _, d := range strings.Split(strings.TrimSpace(down), "\n") {
 			if d != "" {
 				b.WriteString("--rollback " + d + "\n")
@@ -174,7 +174,7 @@ func Write(root, fw, dir string, set *Set, m NewMigration, now time.Time) ([]str
 				if ferr != nil {
 					return files, ferr
 				}
-				_, err = fmt.Fprintf(f, "%s %s changegate <changegate@localhost> # %s\n", name, now.UTC().Format(time.RFC3339), m.Name)
+				_, err = fmt.Fprintf(f, "%s %s changeward <changeward@localhost> # %s\n", name, now.UTC().Format(time.RFC3339), m.Name)
 				_ = f.Close()
 				files = append(files, filepath.Join(dir, "sqitch.plan"))
 			}

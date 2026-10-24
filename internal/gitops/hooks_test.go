@@ -14,7 +14,7 @@ data: {a: "1"}
 apiVersion: batch/v1
 kind: Job
 metadata:
-  generateName: changegate-gate-
+  generateName: changeward-gate-
   annotations: {argocd.argoproj.io/hook: PreSync}
 ---
 ---

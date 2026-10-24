@@ -1,4 +1,4 @@
-// Package configfile is the Changegate adapter for reloadable configuration
+// Package configfile is the Changeward adapter for reloadable configuration
 // files: NGINX, Traefik's file provider, HAProxy and similar (§7.5).
 //
 // Operation kind "file": payload is the desired full content of the file.
@@ -36,7 +36,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/srawlin/changegate/pkg/adapter"
+	"github.com/srawlin/changeward/pkg/adapter"
 	"gopkg.in/yaml.v3"
 )
 
@@ -180,7 +180,7 @@ func writeAtomic(path string, b []byte) error {
 	if st, err := os.Stat(path); err == nil {
 		mode = st.Mode().Perm()
 	}
-	tmp := path + ".changegate.tmp"
+	tmp := path + ".changeward.tmp"
 	if err := os.WriteFile(tmp, b, mode); err != nil {
 		return err
 	}
@@ -193,7 +193,7 @@ func (a *Adapter) Plan(ctx context.Context, t adapter.Target, op adapter.Operati
 	if path == "" {
 		return nil, errors.New("configfile: target config path is required")
 	}
-	if op.Kind == "changegate.fingerprint" {
+	if op.Kind == "changeward.fingerprint" {
 		b, _ := os.ReadFile(path)
 		return &adapter.Plan{Facts: map[string]string{"fingerprint": hash(b)}}, nil
 	}

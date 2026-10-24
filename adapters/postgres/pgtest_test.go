@@ -8,14 +8,14 @@ import (
 	"time"
 
 	"github.com/jackc/pgx/v5"
-	"github.com/srawlin/changegate/pkg/adapter"
+	"github.com/srawlin/changeward/pkg/adapter"
 )
 
-// Integration tests need Postgres. They use $CG_TEST_PG18 and $CG_TEST_PG16
+// Integration tests need Postgres. They use $CW_TEST_PG18 and $CW_TEST_PG16
 // (admin DSNs), defaulting to the docker containers in scripts/test-pg.sh.
 var servers = map[string]string{
-	"pg18": envOr("CG_TEST_PG18", "postgres://postgres:pg@localhost:55418/postgres?sslmode=disable"),
-	"pg16": envOr("CG_TEST_PG16", "postgres://postgres:pg@localhost:55416/postgres?sslmode=disable"),
+	"pg18": envOr("CW_TEST_PG18", "postgres://postgres:pg@localhost:55418/postgres?sslmode=disable"),
+	"pg16": envOr("CW_TEST_PG16", "postgres://postgres:pg@localhost:55416/postgres?sslmode=disable"),
 }
 
 func envOr(k, d string) string {
@@ -52,7 +52,7 @@ func freshDB(t *testing.T, admin string, env string, seed string) (adapter.Targe
 	if err != nil {
 		t.Fatal(err)
 	}
-	name := fmt.Sprintf("cgtest_%d", time.Now().UnixNano())
+	name := fmt.Sprintf("cwtest_%d", time.Now().UnixNano())
 	if _, err := c.Exec(ctx, "CREATE DATABASE "+name); err != nil {
 		t.Fatal(err)
 	}
@@ -104,7 +104,7 @@ INSERT INTO nopk VALUES (1, 'a'), (1, 'a'), (2, 'b');
 
 func fp(t *testing.T, a *Adapter, tg adapter.Target) string {
 	t.Helper()
-	p, err := a.Plan(context.Background(), tg, adapter.Operation{Kind: "changegate.fingerprint"})
+	p, err := a.Plan(context.Background(), tg, adapter.Operation{Kind: "changeward.fingerprint"})
 	if err != nil {
 		t.Fatal(err)
 	}

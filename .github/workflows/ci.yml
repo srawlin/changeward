@@ -31,12 +31,12 @@ jobs:
       - uses: hashicorp/setup-terraform@v3
         with: { terraform_wrapper: false }
       - uses: helm/kind-action@v1
-        with: { cluster_name: changegate }
+        with: { cluster_name: changeward }
       - run: go vet ./...
       - run: go test -race ./...
       - name: SDK tests (Python, TypeScript) against a live executor
         run: |
-          go build -o bin/changegate ./cmd/changegate
+          go build -o bin/changeward ./cmd/changeward
           (cd sdk/python && PYTHONPATH=src python3 -m unittest -v tests.test_sdk)
           (cd sdk/typescript && node --experimental-strip-types --test test/*.test.ts)
           (cd integrations/contextforge && python3 -m unittest -v tests.test_plugin)

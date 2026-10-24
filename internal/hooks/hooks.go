@@ -9,8 +9,8 @@ import (
 	"regexp"
 	"strings"
 
-	"github.com/srawlin/changegate/adapters/postgres"
-	"github.com/srawlin/changegate/pkg/adapter"
+	"github.com/srawlin/changeward/adapters/postgres"
+	"github.com/srawlin/changeward/pkg/adapter"
 )
 
 // Decision is a hook verdict.
@@ -131,22 +131,22 @@ func evaluateOne(c, line string, targets []Target) Decision {
 		return Decision{Permission: "allow"}
 	}
 	switch base(w[0]) {
-	case "changegate":
-		return evaluateChangegate(w[1:])
+	case "changeward":
+		return evaluateChangeward(w[1:])
 	case "psql":
 		return evaluatePsql(c+" "+pipedPsql(line), w[1:], targets)
 	case "kubectl", "oc":
 		if len(w) > 1 && oneOf(w[1], "apply", "delete", "patch", "replace", "scale", "edit", "create", "rollout", "set", "label", "annotate", "drain", "cordon", "taint") {
 			if t, ok := firstOf(targets, "kubernetes"); ok {
-				return Decision{"deny", fmt.Sprintf("kubectl %s changes the cluster without a preview or undo. Use Changegate instead: "+
-					"`changegate exec --target %s -f manifest.yaml` for apply, or `changegate exec --target %s \"delete deploy/NAME\"` / \"scale deploy/NAME --replicas=N\"", w[1], t.Name, t.Name)}
+				return Decision{"deny", fmt.Sprintf("kubectl %s changes the cluster without a preview or undo. Use Changeward instead: "+
+					"`changeward exec --target %s -f manifest.yaml` for apply, or `changeward exec --target %s \"delete deploy/NAME\"` / \"scale deploy/NAME --replicas=N\"", w[1], t.Name, t.Name)}
 			}
-			return Decision{"ask", "kubectl " + w[1] + " changes a cluster directly; no Kubernetes target is registered with Changegate, so confirm manually"}
+			return Decision{"ask", "kubectl " + w[1] + " changes a cluster directly; no Kubernetes target is registered with Changeward, so confirm manually"}
 		}
 	case "terraform", "tofu":
 		if len(w) > 1 && oneOf(w[1], "apply", "destroy", "import", "state") {
 			if t, ok := firstOf(targets, "terraform"); ok && oneOf(w[1], "apply", "destroy") {
-				return Decision{"deny", fmt.Sprintf("%s %s bypasses Changegate's plan review and undo. Run `changegate exec --target %s %s` instead.", base(w[0]), w[1], t.Name, w[1])}
+				return Decision{"deny", fmt.Sprintf("%s %s bypasses Changeward's plan review and undo. Run `changeward exec --target %s %s` instead.", base(w[0]), w[1], t.Name, w[1])}
 			}
 			return Decision{"ask", base(w[0]) + " " + w[1] + " changes infrastructure directly; confirm manually (run plan first)"}
 		}
@@ -194,18 +194,18 @@ func pipedPsql(line string) string {
 	return ""
 }
 
-// Agents may plan, apply and undo through Changegate, but not approve, edit
+// Agents may plan, apply and undo through Changeward, but not approve, edit
 // policy, rebind targets, restore checkpoints or purge trash.
-func evaluateChangegate(args []string) Decision {
+func evaluateChangeward(args []string) Decision {
 	if len(args) == 0 {
 		return Decision{Permission: "allow"}
 	}
 	switch args[0] {
 	case "approve", "reject", "connect", "restore":
-		return Decision{"deny", fmt.Sprintf("`changegate %s` must be run by a human, not the agent. Ask the user to run it.", args[0])}
+		return Decision{"deny", fmt.Sprintf("`changeward %s` must be run by a human, not the agent. Ask the user to run it.", args[0])}
 	case "policy":
 		if len(args) > 1 && args[1] != "check" {
-			return Decision{"deny", "agents cannot change Changegate policy"}
+			return Decision{"deny", "agents cannot change Changeward policy"}
 		}
 	case "trash":
 		if len(args) > 1 && args[1] == "purge" {
@@ -219,7 +219,7 @@ func evaluateChangegate(args []string) Decision {
 
 // evaluatePsql extracts SQL from psql -c/--command (and notes -f / stdin
 // use). Reads are allowed; anything that writes to a registered target is
-// denied with instructions to go through Changegate.
+// denied with instructions to go through Changeward.
 func evaluatePsql(raw string, args []string, targets []Target) Decision {
 	var sqls []string
 	fileOrStdin := false
@@ -258,26 +258,26 @@ func evaluatePsql(raw string, args []string, targets []Target) Decision {
 	if len(sqls) == 0 {
 		if fileOrStdin {
 			return Decision{"deny", fmt.Sprintf("psql with a script or stdin against target %q can change it without a preview. "+
-				"Use the changegate MCP tools (propose_change, then apply_change), or `changegate exec -f FILE --target %s`.", t.Name, t.Name)}
+				"Use the changeward MCP tools (propose_change, then apply_change), or `changeward exec -f FILE --target %s`.", t.Name, t.Name)}
 		}
-		return Decision{"ask", fmt.Sprintf("interactive psql session against target %q bypasses Changegate", t.Name)}
+		return Decision{"ask", fmt.Sprintf("interactive psql session against target %q bypasses Changeward", t.Name)}
 	}
 	for _, sql := range sqls {
 		if strings.HasPrefix(strings.TrimSpace(sql), `\`) {
 			if !psqlMetaReadOnly(sql) {
-				return Decision{"deny", fmt.Sprintf("psql meta-command %q against target %q can change it or run scripts outside Changegate. "+
-					"Use the changegate MCP tools (propose_change, then apply_change) or `changegate exec`.", strings.Fields(sql)[0], t.Name)}
+				return Decision{"deny", fmt.Sprintf("psql meta-command %q against target %q can change it or run scripts outside Changeward. "+
+					"Use the changeward MCP tools (propose_change, then apply_change) or `changeward exec`.", strings.Fields(sql)[0], t.Name)}
 			}
 			continue
 		}
 		_, stmts, err := postgres.Classify(sql)
 		if err != nil {
-			return Decision{"deny", fmt.Sprintf("Changegate could not parse this SQL (%v); fix it and use `changegate exec` or the propose_change tool", err)}
+			return Decision{"deny", fmt.Sprintf("Changeward could not parse this SQL (%v); fix it and use `changeward exec` or the propose_change tool", err)}
 		}
 		for _, s := range stmts {
 			if s.Access != adapter.Read {
-				return Decision{"deny", fmt.Sprintf("This psql command writes to %q (%s), so it must go through Changegate for a preview, policy check and undo. "+
-					"Use the changegate MCP tools (propose_change → apply_change), or run: changegate exec --target %s %q",
+				return Decision{"deny", fmt.Sprintf("This psql command writes to %q (%s), so it must go through Changeward for a preview, policy check and undo. "+
+					"Use the changeward MCP tools (propose_change → apply_change), or run: changeward exec --target %s %q",
 					t.Name, s.Kind, t.Name, strings.Join(sqls, "; "))}
 			}
 		}

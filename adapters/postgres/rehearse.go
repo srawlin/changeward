@@ -13,7 +13,7 @@ import (
 	"time"
 
 	"github.com/jackc/pgx/v5"
-	"github.com/srawlin/changegate/pkg/adapter"
+	"github.com/srawlin/changeward/pkg/adapter"
 )
 
 // Rehearsal tiers (plan §5.3.1).
@@ -46,7 +46,7 @@ type Commands struct {
 
 // RehearsalOptions configure a migration rehearsal.
 type RehearsalOptions struct {
-	// AdminDSN connects to a server where Changegate may CREATE DATABASE.
+	// AdminDSN connects to a server where Changeward may CREATE DATABASE.
 	AdminDSN string
 	// FromDatabase clones an existing database (golden image or clone) with
 	// CREATE DATABASE ... TEMPLATE. Base migrations are assumed applied.
@@ -212,7 +212,7 @@ func provision(ctx context.Context, o *RehearsalOptions, rep *RehearsalReport) (
 	if err != nil {
 		return "", nil, fmt.Errorf("connect admin DSN: %w", err)
 	}
-	name := fmt.Sprintf("cg_rehearse_%d", time.Now().UnixNano())
+	name := fmt.Sprintf("cw_rehearse_%d", time.Now().UnixNano())
 	create := "CREATE DATABASE " + QuoteIdent(name)
 	if o.FromDatabase != "" {
 		create += " TEMPLATE " + QuoteIdent(o.FromDatabase)
@@ -606,7 +606,7 @@ func rehearseCommands(ctx context.Context, conn *pgx.Conn, dsn string, o Rehears
 		}()
 		t0 := time.Now()
 		cmd := exec.CommandContext(ctx, "sh", "-c", strings.ReplaceAll(cmdline, "{n}", fmt.Sprint(len(news))))
-		cmd.Env = append(os.Environ(), "DATABASE_URL="+dsn, "CHANGEGATE_REHEARSAL=1", fmt.Sprintf("CHANGEGATE_NEW_MIGRATIONS=%d", len(news)))
+		cmd.Env = append(os.Environ(), "DATABASE_URL="+dsn, "CHANGEWARD_REHEARSAL=1", fmt.Sprintf("CHANGEWARD_NEW_MIGRATIONS=%d", len(news)))
 		var out bytes.Buffer
 		cmd.Stdout, cmd.Stderr = &out, &out
 		err := cmd.Run()

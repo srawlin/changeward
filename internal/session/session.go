@@ -12,10 +12,10 @@ import (
 	"strings"
 	"time"
 
-	"github.com/srawlin/changegate/internal/engine"
-	"github.com/srawlin/changegate/internal/model"
-	"github.com/srawlin/changegate/internal/store"
-	"github.com/srawlin/changegate/pkg/adapter"
+	"github.com/srawlin/changeward/internal/engine"
+	"github.com/srawlin/changeward/internal/model"
+	"github.com/srawlin/changeward/internal/store"
+	"github.com/srawlin/changeward/pkg/adapter"
 )
 
 // TargetResolver resolves a target name to a connection (with config).
@@ -87,14 +87,14 @@ func (s *Service) SetCurrent(id string) error {
 	return os.WriteFile(s.currentFile(), []byte(id+"\n"), 0o600)
 }
 
-// Current returns the current session ID: $CHANGEGATE_SESSION or the last started.
+// Current returns the current session ID: $CHANGEWARD_SESSION or the last started.
 func (s *Service) Current() (string, error) {
-	if id := os.Getenv("CHANGEGATE_SESSION"); id != "" {
+	if id := os.Getenv("CHANGEWARD_SESSION"); id != "" {
 		return id, nil
 	}
 	b, err := os.ReadFile(s.currentFile())
 	if err != nil {
-		return "", errors.New("no current session (run `changegate session start`)")
+		return "", errors.New("no current session (run `changeward session start`)")
 	}
 	return strings.TrimSpace(string(b)), nil
 }

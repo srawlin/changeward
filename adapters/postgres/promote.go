@@ -38,7 +38,7 @@ func MigrationSteps(payload string, undo json.RawMessage, includeData bool) (up,
 		case s.Category == CatDDL && ok && st.DDL != nil:
 			soft := classifyDDL(s).Soft
 			if soft != "" {
-				down = append(down, fmt.Sprintf("-- IRREVERSIBLE in a migration: %s destroys data (Changegate soft-dropped it in the live session)", firstLine(s.Text)))
+				down = append(down, fmt.Sprintf("-- IRREVERSIBLE in a migration: %s destroys data (Changeward soft-dropped it in the live session)", firstLine(s.Text)))
 				notes = append(notes, fmt.Sprintf("%q cannot be reversed by a down migration; consider expand/contract", firstLine(s.Text)))
 				continue
 			}
@@ -71,7 +71,7 @@ func migrationInverse(inv []string) []string {
 	for _, sql := range inv {
 		t := strings.TrimSpace(sql)
 		switch {
-		case strings.HasPrefix(t, "CREATE SCHEMA IF NOT EXISTS \""+TrashSchema+"\""), strings.HasPrefix(t, "DO $cg$"), reSetTrash.MatchString(t):
+		case strings.HasPrefix(t, "CREATE SCHEMA IF NOT EXISTS \""+TrashSchema+"\""), strings.HasPrefix(t, "DO $cw$"), reSetTrash.MatchString(t):
 			continue
 		case reSoftRename.MatchString(t):
 			m := reSoftRename.FindStringSubmatch(t)

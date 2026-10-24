@@ -12,12 +12,12 @@ On a laptop, the MCP server runs the engine in-process with your own credentials
 ## Run it
 
 ```sh
-changegate executor token alice --roles propose     # prints the token once, and the config entry to add
-changegate executor token sre-oncall --roles approve
-changegate executor serve --addr 0.0.0.0:8443 --tls-cert cert.pem --tls-key key.pem
+changeward executor token alice --roles propose     # prints the token once, and the config entry to add
+changeward executor token sre-oncall --roles approve
+changeward executor serve --addr 0.0.0.0:8443 --tls-cert cert.pem --tls-key key.pem
 ```
 
-`changegate.yaml` on the executor:
+`changeward.yaml` on the executor:
 
 ```yaml
 targets:
@@ -43,13 +43,13 @@ Only the SHA-256 of each token is stored. A token's **name** is the delegating h
 
 ```sh
 # MCP server for a coding agent, backed by the executor:
-changegate mcp postgres --target app --executor https://changegate.internal:8443   # token in $CHANGEGATE_EXECUTOR_TOKEN
+changeward mcp postgres --target app --executor https://changeward.internal:8443   # token in $CHANGEWARD_EXECUTOR_TOKEN
 
 # Approvals:
-CHANGEGATE_EXECUTOR_URL=https://changegate.internal:8443 CHANGEGATE_EXECUTOR_TOKEN=$SRE_TOKEN changegate approve c_…
+CHANGEWARD_EXECUTOR_URL=https://changeward.internal:8443 CHANGEWARD_EXECUTOR_TOKEN=$SRE_TOKEN changeward approve c_…
 
 # GitOps gate:
-changegate k8s gate --manifests rendered/ --target cluster --executor https://changegate.internal:8443
+changeward k8s gate --manifests rendered/ --target cluster --executor https://changeward.internal:8443
 ```
 
 [Python and TypeScript SDKs](agents/sdks.md) call the same API.
@@ -57,12 +57,12 @@ changegate k8s gate --manifests rendered/ --target cluster --executor https://ch
 ## Helm
 
 ```sh
-helm install changegate deploy/helm/changegate-executor -n changegate --create-namespace -f values.yaml
+helm install changeward deploy/helm/changeward-executor -n changeward --create-namespace -f values.yaml
 ```
 
 ```yaml
-image: { repository: ghcr.io/srawlin/changegate, tag: latest }
-existingSecret: changegate-env           # env vars referenced as ${VAR} in config (DSNs, Slack tokens)
+image: { repository: ghcr.io/srawlin/changeward, tag: latest }
+existingSecret: changeward-env           # env vars referenced as ${VAR} in config (DSNs, Slack tokens)
 persistence: { enabled: true, size: 1Gi } # SQLite audit log; one replica
 rbac:
   kubernetes:                            # for kubernetes targets, using the in-cluster service account
@@ -89,12 +89,12 @@ deployed in kind and used by the Python SDK and the Argo CD PreSync gate.
 
 ## systemd
 
-[`deploy/systemd/changegate-executor.service`](../deploy/systemd/changegate-executor.service) runs it as a
-`changegate` user, with `/etc/changegate/changegate.yaml` and secrets in `/etc/changegate/env`.
+[`deploy/systemd/changeward-executor.service`](../deploy/systemd/changeward-executor.service) runs it as a
+`changeward` user, with `/etc/changeward/changeward.yaml` and secrets in `/etc/changeward/env`.
 
 ## API
 
-All routes need `Authorization: Bearer <token>`. Gateways may send `X-Changegate-Token` instead and keep the
+All routes need `Authorization: Bearer <token>`. Gateways may send `X-Changeward-Token` instead and keep the
 client's own `Authorization` header.
 
 | Route | Role |

@@ -92,7 +92,7 @@ func GitHubFromEnv() (*GitHub, error) {
 	return g, nil
 }
 
-// Comment creates or updates the Changegate comment on the PR.
+// Comment creates or updates the Changeward comment on the PR.
 func (g *GitHub) Comment(body string) (string, error) { return g.CommentWithMarker(body, Marker) }
 
 // CommentWithMarker creates or updates the comment containing marker.
@@ -131,7 +131,7 @@ func (g *GitHub) Status(state, description, targetURL string) error {
 		description = description[:137] + "..."
 	}
 	return doJSON("POST", fmt.Sprintf("%s/repos/%s/statuses/%s", g.API, g.Repo, g.SHA), g.Token, "",
-		map[string]string{"state": state, "description": description, "context": "changegate/rehearsal", "target_url": targetURL}, nil)
+		map[string]string{"state": state, "description": description, "context": "changeward/rehearsal", "target_url": targetURL}, nil)
 }
 
 // GitLab posts reports to a GitLab merge request.
@@ -140,23 +140,23 @@ type GitLab struct {
 	Project string // $CI_PROJECT_ID
 	MR      string // $CI_MERGE_REQUEST_IID
 	SHA     string
-	Token   string // $CHANGEGATE_GITLAB_TOKEN or $GITLAB_TOKEN (api scope)
+	Token   string // $CHANGEWARD_GITLAB_TOKEN or $GITLAB_TOKEN (api scope)
 }
 
 // GitLabFromEnv reads GitLab CI environment variables.
 func GitLabFromEnv() (*GitLab, error) {
 	g := &GitLab{API: os.Getenv("CI_API_V4_URL"), Project: os.Getenv("CI_PROJECT_ID"), MR: os.Getenv("CI_MERGE_REQUEST_IID"),
-		SHA: os.Getenv("CI_COMMIT_SHA"), Token: os.Getenv("CHANGEGATE_GITLAB_TOKEN")}
+		SHA: os.Getenv("CI_COMMIT_SHA"), Token: os.Getenv("CHANGEWARD_GITLAB_TOKEN")}
 	if g.Token == "" {
 		g.Token = os.Getenv("GITLAB_TOKEN")
 	}
 	if g.API == "" || g.Project == "" || g.Token == "" {
-		return nil, errors.New("gitlab: CI_API_V4_URL, CI_PROJECT_ID and CHANGEGATE_GITLAB_TOKEN (api scope) are required")
+		return nil, errors.New("gitlab: CI_API_V4_URL, CI_PROJECT_ID and CHANGEWARD_GITLAB_TOKEN (api scope) are required")
 	}
 	return g, nil
 }
 
-// Comment creates or updates the Changegate note on the MR.
+// Comment creates or updates the Changeward note on the MR.
 func (g *GitLab) Comment(body string) error {
 	if g.MR == "" {
 		return errors.New("gitlab: not a merge request pipeline")
@@ -182,6 +182,6 @@ func (g *GitLab) Status(state, description string) error {
 	if g.SHA == "" {
 		return errors.New("gitlab: no commit SHA")
 	}
-	q := url.Values{"state": {state}, "name": {"changegate/rehearsal"}, "description": {description}}
+	q := url.Values{"state": {state}, "name": {"changeward/rehearsal"}, "description": {description}}
 	return doJSON("POST", fmt.Sprintf("%s/projects/%s/statuses/%s?%s", g.API, url.PathEscape(g.Project), g.SHA, q.Encode()), g.Token, "PRIVATE-TOKEN", nil, nil)
 }

@@ -1,4 +1,4 @@
-// Package postgres is the Changegate Postgres adapter.
+// Package postgres is the Changeward Postgres adapter.
 //
 // Lane B (direct): a change is planned by executing it inside a REPEATABLE
 // READ transaction that is always rolled back, so the plan reflects real
@@ -8,7 +8,7 @@
 // the statement and aborts if the affected rows differ from the plan
 // (drift). Undo applies guarded inverses that touch a row only if it still
 // equals its after-image. Destructive DDL is soft-dropped into
-// _changegate_trash so it stays reversible without backups.
+// _changeward_trash so it stays reversible without backups.
 package postgres
 
 import (
@@ -25,7 +25,7 @@ import (
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgxpool"
-	"github.com/srawlin/changegate/pkg/adapter"
+	"github.com/srawlin/changeward/pkg/adapter"
 )
 
 // Version is the adapter version.
@@ -103,7 +103,7 @@ func (a *Adapter) pool(ctx context.Context, t adapter.Target) (*pgxpool.Pool, er
 		return nil, fmt.Errorf("target %q: %w", t.Name, err)
 	}
 	cfg.MaxConns = 4
-	cfg.ConnConfig.RuntimeParams["application_name"] = "changegate"
+	cfg.ConnConfig.RuntimeParams["application_name"] = "changeward"
 	p, err := pgxpool.NewWithConfig(ctx, cfg)
 	if err != nil {
 		return nil, err
@@ -225,7 +225,7 @@ func setLocal(ctx context.Context, tx pgx.Tx, stmt, lock time.Duration) error {
 // Plan implements adapter.Adapter: a live dry run in a rolled-back transaction.
 func (a *Adapter) Plan(ctx context.Context, t adapter.Target, op adapter.Operation) (*adapter.Plan, error) {
 	switch op.Kind {
-	case "changegate.fingerprint":
+	case "changeward.fingerprint":
 		return a.fingerprintPlan(ctx, t)
 	case "sql", "":
 	default:
@@ -441,12 +441,12 @@ func (b *planBuilder) planDML(ctx context.Context, tx pgx.Tx, i int, s *Stmt, st
 	if err != nil {
 		return err
 	}
-	if _, err := tx.Exec(ctx, "SAVEPOINT cg_step"); err != nil {
+	if _, err := tx.Exec(ctx, "SAVEPOINT cw_step"); err != nil {
 		return err
 	}
 	c, err := runDML(ctx, tx, mode, execSQL, preSQL, s.Kind, pk)
 	if errors.Is(err, errNoPairing) {
-		if _, err := tx.Exec(ctx, "ROLLBACK TO SAVEPOINT cg_step"); err != nil {
+		if _, err := tx.Exec(ctx, "ROLLBACK TO SAVEPOINT cw_step"); err != nil {
 			return err
 		}
 		mode, execSQL, preSQL = CaptureNone, s.Text, ""
@@ -473,7 +473,7 @@ func (b *planBuilder) planDML(ctx context.Context, tx pgx.Tx, i int, s *Stmt, st
 	}
 	if rel.Kind == "f" {
 		step.Reversibility = adapter.Worst(step.Reversibility, adapter.CheckpointOnly)
-		b.warn(fmt.Sprintf("#%d %s is a foreign table; remote effects are outside Changegate's control", i+1, rel.display()))
+		b.warn(fmt.Sprintf("#%d %s is a foreign table; remote effects are outside Changeward's control", i+1, rel.display()))
 	}
 	trigs, external, err := userTriggers(ctx, tx, rel.OID)
 	if err != nil {
@@ -851,14 +851,14 @@ func (a *Adapter) Undo(ctx context.Context, t adapter.Target, _ *adapter.Plan, r
 				break
 			}
 			for _, sql := range s.DDL.Inverse {
-				if _, err := tx.Exec(ctx, "SAVEPOINT cg_inv"); err != nil {
+				if _, err := tx.Exec(ctx, "SAVEPOINT cw_inv"); err != nil {
 					return nil, err
 				}
 				if _, err := tx.Exec(ctx, sql); err != nil {
 					var pe *pgconn.PgError
 					if errors.As(err, &pe) {
 						conflicts = append(conflicts, fmt.Sprintf("inverse %q failed: %s", firstLine(sql), pe.Message))
-						_, _ = tx.Exec(ctx, "ROLLBACK TO SAVEPOINT cg_inv")
+						_, _ = tx.Exec(ctx, "ROLLBACK TO SAVEPOINT cw_inv")
 						continue
 					}
 					return nil, err

@@ -5,9 +5,9 @@ import (
 	"errors"
 	"fmt"
 
-	"github.com/srawlin/changegate/internal/model"
-	"github.com/srawlin/changegate/internal/policy"
-	"github.com/srawlin/changegate/pkg/adapter"
+	"github.com/srawlin/changeward/internal/model"
+	"github.com/srawlin/changeward/internal/policy"
+	"github.com/srawlin/changeward/pkg/adapter"
 )
 
 // ProposeChangeset proposes every step (each gets its own plan, evidence

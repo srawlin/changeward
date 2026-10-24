@@ -1,4 +1,4 @@
-"""Integration tests: run against a real `changegate executor serve` with toy targets."""
+"""Integration tests: run against a real `changeward executor serve` with toy targets."""
 
 import hashlib
 import json
@@ -10,12 +10,12 @@ import time
 import unittest
 import urllib.request
 
-from changegate_sdk import Client, Conflict, Denied, PendingApproval, guarded
-from changegate_sdk.integrations.agents import propose_and_apply_text
-from changegate_sdk.integrations.langgraph import apply_with_interrupt
+from changeward_sdk import Client, Conflict, Denied, PendingApproval, guarded
+from changeward_sdk.integrations.agents import propose_and_apply_text
+from changeward_sdk.integrations.langgraph import apply_with_interrupt
 
-BIN = os.environ.get("CHANGEGATE_BIN", os.path.join(os.path.dirname(__file__), "..", "..", "..", "bin", "changegate"))
-DEV_TOKEN, OPS_TOKEN = "cgx_dev_token_for_tests", "cgx_ops_token_for_tests"
+BIN = os.environ.get("CHANGEWARD_BIN", os.path.join(os.path.dirname(__file__), "..", "..", "..", "bin", "changeward"))
+DEV_TOKEN, OPS_TOKEN = "cwx_dev_token_for_tests", "cwx_ops_token_for_tests"
 
 
 def sha(t):
@@ -39,10 +39,10 @@ class ExecutorTest(unittest.TestCase):
             "executor": {"tokens": [{"name": "dev", "sha256": sha(DEV_TOKEN), "roles": ["propose"]},
                                     {"name": "ops", "sha256": sha(OPS_TOKEN), "roles": ["propose", "approve"]}]},
         }
-        path = os.path.join(cls.dir, "changegate.yaml")
+        path = os.path.join(cls.dir, "changeward.yaml")
         with open(path, "w") as f:
             json.dump(cfg, f)  # JSON is valid YAML
-        env = dict(os.environ, CHANGEGATE_CONFIG=path)
+        env = dict(os.environ, CHANGEWARD_CONFIG=path)
         cls.proc = subprocess.Popen([BIN, "executor", "serve", "--addr", f"127.0.0.1:{port}"], env=env, stderr=subprocess.DEVNULL)
         cls.url = f"http://127.0.0.1:{port}"
         for _ in range(100):
@@ -119,7 +119,7 @@ class ExecutorTest(unittest.TestCase):
         self.assertTrue(big.needs_approval, big.data.get("decision"))
         apply_with_interrupt(big, interrupt=fake_interrupt)
         self.assertEqual(len(seen), 1)
-        self.assertTrue(seen[0]["changegate"]["inline"])
+        self.assertTrue(seen[0]["changeward"]["inline"])
         self.assertEqual(big.state, "verified")
 
 

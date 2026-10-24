@@ -5,16 +5,16 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/srawlin/changegate/adapters/postgres"
-	"github.com/srawlin/changegate/internal/model"
-	"github.com/srawlin/changegate/pkg/adapter"
+	"github.com/srawlin/changeward/adapters/postgres"
+	"github.com/srawlin/changeward/internal/model"
+	"github.com/srawlin/changeward/pkg/adapter"
 )
 
-// Marker identifies Changegate's PR/MR comment so it can be updated in place.
-const Marker = "<!-- changegate-report -->"
+// Marker identifies Changeward's PR/MR comment so it can be updated in place.
+const Marker = "<!-- changeward-report -->"
 
 // Evidence is everything the report and gate need. It is the JSON written
-// by `changegate rehearse --out`.
+// by `changeward rehearse --out`.
 type Evidence struct {
 	Rehearsal  *postgres.RehearsalReport `json:"rehearsal"`
 	Provenance Provenance                `json:"provenance"`
@@ -55,7 +55,7 @@ func Markdown(e *Evidence) string {
 	b.WriteString(Marker + "\n")
 	r := e.Rehearsal
 	if r == nil || len(r.Results) == 0 {
-		b.WriteString("## Changegate: no new migrations in this change\n")
+		b.WriteString("## Changeward: no new migrations in this change\n")
 		for _, s := range e.Skipped {
 			b.WriteString("- " + s + "\n")
 		}
@@ -68,7 +68,7 @@ func Markdown(e *Evidence) string {
 	case r.Reversibility != adapter.Reversible:
 		headline = "not proven reversible (" + string(r.Reversibility) + ")"
 	}
-	fmt.Fprintf(&b, "## %s Changegate rehearsal: %d migration(s) · %s\n\n", revIcon(r.Reversibility, r.Passed), len(r.Results), headline)
+	fmt.Fprintf(&b, "## %s Changeward rehearsal: %d migration(s) · %s\n\n", revIcon(r.Reversibility, r.Passed), len(r.Results), headline)
 	tier := tierNames[r.Tier]
 	if tier == "" {
 		tier = r.Tier
@@ -176,7 +176,7 @@ func Markdown(e *Evidence) string {
 		b.WriteString(strings.Join(append(append([]string{}, r.Notes...), e.Skipped...), " · "))
 		b.WriteString("\n\n")
 	}
-	b.WriteString("<sub>Changegate rehearses each migration on a throwaway copy: forward, observe locks/rewrites/rows, run the down migration, and compare catalog and data checksums with the state before. Row values never leave the copy.</sub>\n")
+	b.WriteString("<sub>Changeward rehearses each migration on a throwaway copy: forward, observe locks/rewrites/rows, run the down migration, and compare catalog and data checksums with the state before. Row values never leave the copy.</sub>\n")
 	return b.String()
 }
 

@@ -1,0 +1,22 @@
+[Unit]
+Description=Changeward shared executor
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+User=changeward
+Group=changeward
+Environment=CHANGEWARD_CONFIG=/etc/changeward/changeward.yaml
+Environment=CHANGEWARD_STORE=/var/lib/changeward/changeward.db
+EnvironmentFile=-/etc/changeward/env
+ExecStart=/usr/local/bin/changeward executor serve --addr 127.0.0.1:8443
+Restart=on-failure
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+PrivateTmp=true
+ReadWritePaths=/var/lib/changeward
+StateDirectory=changeward
+
+[Install]
+WantedBy=multi-user.target

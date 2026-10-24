@@ -12,9 +12,9 @@ import (
 	"strings"
 	"time"
 
-	"github.com/srawlin/changegate/internal/backend"
-	"github.com/srawlin/changegate/internal/model"
-	"github.com/srawlin/changegate/pkg/adapter"
+	"github.com/srawlin/changeward/internal/backend"
+	"github.com/srawlin/changeward/internal/model"
+	"github.com/srawlin/changeward/pkg/adapter"
 )
 
 // Client implements backend.Backend against a shared executor.

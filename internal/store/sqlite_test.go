@@ -6,14 +6,14 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/srawlin/changegate/internal/model"
-	"github.com/srawlin/changegate/internal/store"
-	"github.com/srawlin/changegate/pkg/adapter"
+	"github.com/srawlin/changeward/internal/model"
+	"github.com/srawlin/changeward/internal/store"
+	"github.com/srawlin/changeward/pkg/adapter"
 )
 
 func open(t *testing.T) *store.SQLite {
 	t.Helper()
-	s, err := store.OpenSQLite(filepath.Join(t.TempDir(), "cg.db"))
+	s, err := store.OpenSQLite(filepath.Join(t.TempDir(), "cw.db"))
 	if err != nil {
 		t.Fatal(err)
 	}

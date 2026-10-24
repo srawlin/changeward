@@ -15,7 +15,7 @@ import (
 	"time"
 
 	"github.com/jackc/pgx/v5"
-	"github.com/srawlin/changegate/pkg/adapter"
+	"github.com/srawlin/changeward/pkg/adapter"
 )
 
 // Checkpoint strategies.
@@ -86,7 +86,7 @@ func otherConnections(ctx context.Context, c *pgx.Conn, db string) (int, error) 
 	return n, err
 }
 
-// allowForce reports whether Changegate may terminate other sessions on the
+// allowForce reports whether Changeward may terminate other sessions on the
 // target. Only ever in personal environments, and only when configured.
 func allowForce(t adapter.Target) bool {
 	return t.Env == adapter.EnvPersonal && t.Config["allow_terminate"] == "true"
@@ -151,7 +151,7 @@ func (a *Adapter) templateCheckpoint(ctx context.Context, t adapter.Target, id s
 			return checkpointData{}, err
 		}
 	}
-	cp := copyName("cg_"+strings.TrimPrefix(id, "cp_"), db)
+	cp := copyName("cw_"+strings.TrimPrefix(id, "cp_"), db)
 	if _, err := c.Exec(ctx, fmt.Sprintf("CREATE DATABASE %s TEMPLATE %s", QuoteIdent(cp), QuoteIdent(db))); err != nil {
 		return checkpointData{}, fmt.Errorf("create checkpoint database: %w", err)
 	}
@@ -201,7 +201,7 @@ func (a *Adapter) Restore(ctx context.Context, t adapter.Target, cp *adapter.Che
 			return nil, err
 		}
 		// Keep the current state as a safety copy until the restore succeeds.
-		aside := copyName("cg_pre_restore_"+strings.TrimPrefix(cp.ID, "cp_"), db)
+		aside := copyName("cw_pre_restore_"+strings.TrimPrefix(cp.ID, "cp_"), db)
 		if _, err := c.Exec(ctx, fmt.Sprintf("ALTER DATABASE %s RENAME TO %s", QuoteIdent(db), QuoteIdent(aside))); err != nil {
 			return nil, fmt.Errorf("set current database aside: %w", err)
 		}
@@ -289,7 +289,7 @@ func (a *Adapter) ProvisionCopy(ctx context.Context, t adapter.Target, name stri
 	}
 	defer func() { _ = c.Close(ctx) }()
 	if name == "" {
-		name = copyName(db, "cg_"+strings.TrimPrefix(adapter.NewID("b"), "b_"))
+		name = copyName(db, "cw_"+strings.TrimPrefix(adapter.NewID("b"), "b_"))
 	}
 	src := t.Config["copy_from"] // e.g. a replica-side template or golden image
 	if src == "" {

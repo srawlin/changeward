@@ -1,0 +1,9 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "cw.name" . }}
+  labels: {{- include "cw.labels" . | nindent 4 }}
+spec:
+  type: {{ .Values.service.type }}
+  selector: { app.kubernetes.io/name: changeward-executor, app.kubernetes.io/instance: {{ .Release.Name }} }
+  ports: [{ name: http, port: {{ .Values.service.port }}, targetPort: http }]

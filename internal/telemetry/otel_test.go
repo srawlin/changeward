@@ -12,13 +12,13 @@ import (
 	"testing"
 	"time"
 
-	"github.com/srawlin/changegate/adapters/toykv"
-	"github.com/srawlin/changegate/internal/engine"
-	"github.com/srawlin/changegate/internal/model"
-	"github.com/srawlin/changegate/internal/policy"
-	"github.com/srawlin/changegate/internal/store"
-	"github.com/srawlin/changegate/internal/telemetry"
-	"github.com/srawlin/changegate/pkg/adapter"
+	"github.com/srawlin/changeward/adapters/toykv"
+	"github.com/srawlin/changeward/internal/engine"
+	"github.com/srawlin/changeward/internal/model"
+	"github.com/srawlin/changeward/internal/policy"
+	"github.com/srawlin/changeward/internal/store"
+	"github.com/srawlin/changeward/internal/telemetry"
+	"github.com/srawlin/changeward/pkg/adapter"
 )
 
 func TestOTLPExport(t *testing.T) {
@@ -54,7 +54,7 @@ func TestOTLPExport(t *testing.T) {
 	}))
 	defer srv.Close()
 	dir := t.TempDir()
-	st, _ := store.OpenSQLite(filepath.Join(dir, "cg.db"))
+	st, _ := store.OpenSQLite(filepath.Join(dir, "cw.db"))
 	defer func() { _ = st.Close() }()
 	pol, _ := policy.New(nil)
 	eng := &engine.Engine{Store: st, Adapters: engine.MapRegistry{"toykv": toykv.New()}, Policy: pol,
@@ -80,7 +80,7 @@ func TestOTLPExport(t *testing.T) {
 	mu.Lock()
 	defer mu.Unlock()
 	all := strings.Join(names, ",")
-	if len(traces) != 1 || !strings.Contains(all, "changegate.verified") || !strings.Contains(all, "changegate.change kv") {
+	if len(traces) != 1 || !strings.Contains(all, "changeward.verified") || !strings.Contains(all, "changeward.change kv") {
 		t.Fatalf("spans: %v traces=%d", names, len(traces))
 	}
 	if telemetry.NewExporter("", nil) != nil {

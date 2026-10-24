@@ -1,0 +1,6 @@
+apiVersion: v2
+name: changeward-executor
+description: Changeward shared executor - holds target credentials and enforces change policy next to the target systems
+type: application
+version: 0.1.0
+appVersion: "0.1.0"

@@ -2,7 +2,7 @@ spec:
   inputs:
     version:
       default: latest
-      description: Release tag to download, "latest", or "preinstalled" when the job image already has changegate.
+      description: Release tag to download, "latest", or "preinstalled" when the job image already has changeward.
     binary-url:
       default: ""
       description: Download the linux tarball from this URL instead of GitHub releases (e.g. a GitLab generic package; CI_JOB_TOKEN is sent to the same instance).
@@ -22,15 +22,15 @@ spec:
       default: report
       options: [report, gate, deny-only]
 ---
-changegate-rehearse:
+changeward-rehearse:
   stage: $[[ inputs.stage ]]
   image: alpine:3.20
   services:
     - name: postgres:$[[ inputs.postgres-version ]]-alpine
-      alias: changegate-pg
+      alias: changeward-pg
   variables:
-    POSTGRES_PASSWORD: changegate
-    CHANGEGATE_REHEARSAL_DSN: postgres://postgres:changegate@changegate-pg:5432/postgres?sslmode=disable
+    POSTGRES_PASSWORD: changeward
+    CHANGEWARD_REHEARSAL_DSN: postgres://postgres:changeward@changeward-pg:5432/postgres?sslmode=disable
     GIT_DEPTH: "0"
   rules:
     - if: $CI_PIPELINE_SOURCE == "merge_request_event"
@@ -41,31 +41,31 @@ changegate-rehearse:
       v="$[[ inputs.version ]]"; u="$[[ inputs.binary-url ]]"
       if [ -n "$u" ]; then
         case "$u" in "$CI_SERVER_URL"/*) curl -fsSL -H "JOB-TOKEN: $CI_JOB_TOKEN" "$u" -o /tmp/cg.tgz ;; *) curl -fsSL "$u" -o /tmp/cg.tgz ;; esac
-        tar -xzf /tmp/cg.tgz -C /usr/local/bin changegate
+        tar -xzf /tmp/cg.tgz -C /usr/local/bin changeward
       elif [ "$v" != "preinstalled" ]; then
-        if [ "$v" = "latest" ]; then base="https://github.com/srawlin/changegate/releases/latest/download"; else base="https://github.com/srawlin/changegate/releases/download/$v"; fi
-        curl -fsSL "$base/changegate_linux_${arch}.tar.gz" -o /tmp/cg.tgz
+        if [ "$v" = "latest" ]; then base="https://github.com/srawlin/changeward/releases/latest/download"; else base="https://github.com/srawlin/changeward/releases/download/$v"; fi
+        curl -fsSL "$base/changeward_linux_${arch}.tar.gz" -o /tmp/cg.tgz
         curl -fsSL "$base/checksums.txt" -o /tmp/checksums.txt
-        (cd /tmp && grep " changegate_linux_${arch}.tar.gz\$" checksums.txt | sed "s| changegate_linux_${arch}.tar.gz| cg.tgz|" | sha256sum -c -)
-        tar -xzf /tmp/cg.tgz -C /usr/local/bin changegate
+        (cd /tmp && grep " changeward_linux_${arch}.tar.gz\$" checksums.txt | sed "s| changeward_linux_${arch}.tar.gz| cw.tgz|" | sha256sum -c -)
+        tar -xzf /tmp/cg.tgz -C /usr/local/bin changeward
       fi
-      changegate version
+      changeward version
   script:
     - git fetch --no-tags origin "$CI_MERGE_REQUEST_TARGET_BRANCH_NAME"
     - |
       set +e
-      args="--base-ref origin/$CI_MERGE_REQUEST_TARGET_BRANCH_NAME --env $[[ inputs.environment ]] --synthetic $[[ inputs.synthetic-rows ]] --out changegate-evidence.json"
+      args="--base-ref origin/$CI_MERGE_REQUEST_TARGET_BRANCH_NAME --env $[[ inputs.environment ]] --synthetic $[[ inputs.synthetic-rows ]] --out changeward-evidence.json"
       [ -n "$[[ inputs.framework ]]" ] && args="$args --framework $[[ inputs.framework ]]"
       [ -n "$[[ inputs.migrations-dir ]]" ] && args="$args --migrations-dir $[[ inputs.migrations-dir ]]"
-      changegate rehearse $args > changegate-report.md; code=$?
-      cat changegate-report.md
+      changeward rehearse $args > changeward-report.md; code=$?
+      cat changeward-report.md
       [ "$code" -gt 1 ] && exit "$code"
-      if [ -n "${CHANGEGATE_GITLAB_TOKEN:-}${GITLAB_TOKEN:-}" ]; then changegate report changegate-evidence.json --gitlab --status || true; fi
-      gargs=""; [ -n "${CHANGEGATE_GITLAB_TOKEN:-}${GITLAB_TOKEN:-}" ] && gargs="--gitlab"   # MR approvals satisfy "review required"
-      changegate gate changegate-evidence.json $gargs; g=$?
+      if [ -n "${CHANGEWARD_GITLAB_TOKEN:-}${GITLAB_TOKEN:-}" ]; then changeward report changeward-evidence.json --gitlab --status || true; fi
+      gargs=""; [ -n "${CHANGEWARD_GITLAB_TOKEN:-}${GITLAB_TOKEN:-}" ] && gargs="--gitlab"   # MR approvals satisfy "review required"
+      changeward gate changeward-evidence.json $gargs; g=$?
       case "$[[ inputs.mode ]]:$g" in
         report:*) exit 0 ;; gate:0) exit 0 ;; gate:*) exit 1 ;; deny-only:3|deny-only:1) exit 1 ;; *) exit 0 ;;
       esac
   artifacts:
     when: always
-    paths: [changegate-evidence.json, changegate-report.md]
+    paths: [changeward-evidence.json, changeward-report.md]

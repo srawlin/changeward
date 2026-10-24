@@ -1,9 +1,9 @@
-description: "Changegate: route MCP tool calls through change control (preview, policy, approval, undo)"
-author: "Changegate"
+description: "Changeward: route MCP tool calls through change control (preview, policy, approval, undo)"
+author: "Changeward"
 version: "0.1.0"
 available_hooks: [tool_pre_invoke]
 default_configs:
   executor_url: "http://127.0.0.1:8443"
-  token_env: CHANGEGATE_GATEWAY_TOKEN
+  token_env: CHANGEWARD_GATEWAY_TOKEN
   env: prod
   fail_closed: true

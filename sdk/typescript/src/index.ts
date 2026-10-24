@@ -1,9 +1,9 @@
 /**
- * Changegate SDK for TypeScript: route an agent's changes through a Changegate
+ * Changeward SDK for TypeScript: route an agent's changes through a Changeward
  * executor (plan → policy → approval → apply → undo).
  *
- *   const cg = new Client({ url, token });
- *   const session = await cg.startSession({ target: "app", agent: "support-bot" });
+ *   const cw = new Client({ url, token });
+ *   const session = await cw.startSession({ target: "app", agent: "support-bot" });
  *   const change = await session.propose("UPDATE orders SET status = 'refunded' WHERE id = 42", { intent: "refund" });
  *   await change.apply();   // throws PendingApproval / Denied / Conflict
  */
@@ -13,22 +13,22 @@ export interface Decision { decision: "approve" | "require" | "deny"; reasons?: 
 export interface ChangeRecord { id: string; state: string; plan?: Plan; decision?: Decision; session_id?: string; receipt?: { rows_affected: number; output?: string } }
 export interface SessionRecord { id: string; target: string; env: string; principal: { kind: string; agent?: string; human?: string } }
 
-export class ChangegateError extends Error {
+export class ChangewardError extends Error {
   readonly status: number;
   readonly body: Record<string, unknown>;
-  constructor(message: string, status = 0, body: Record<string, unknown> = {}) { super(message); this.name = "ChangegateError"; this.status = status; this.body = body; }
+  constructor(message: string, status = 0, body: Record<string, unknown> = {}) { super(message); this.name = "ChangewardError"; this.status = status; this.body = body; }
 }
 /** The target changed since the plan (or since apply, for undo). Nothing was changed. */
-export class Conflict extends ChangegateError {
+export class Conflict extends ChangewardError {
   get conflicts(): string[] { return (this.body.conflicts as string[]) ?? []; }
 }
 /** Policy requires a human decision; the change was not applied. */
-export class PendingApproval extends ChangegateError {
+export class PendingApproval extends ChangewardError {
   readonly change: Change;
   constructor(change: Change) { super(`change ${change.id} needs approval: ${change.reasons.join("; ")}`); this.name = "PendingApproval"; this.change = change; }
 }
 /** Policy denied the change. */
-export class Denied extends ChangegateError {
+export class Denied extends ChangewardError {
   readonly change: Change;
   constructor(change: Change) { super(`change ${change.id} was denied: ${change.reasons.join("; ")}`); this.name = "Denied"; this.change = change; }
 }
@@ -41,8 +41,8 @@ export class Client {
   private readonly f: typeof fetch;
   constructor(opts: ClientOptions = {}) {
     const env = (globalThis as { process?: { env: Record<string, string | undefined> } }).process?.env ?? {};
-    this.url = (opts.url ?? env.CHANGEGATE_EXECUTOR_URL ?? "http://127.0.0.1:8443").replace(/\/$/, "");
-    this.token = opts.token ?? env.CHANGEGATE_EXECUTOR_TOKEN ?? "";
+    this.url = (opts.url ?? env.CHANGEWARD_EXECUTOR_URL ?? "http://127.0.0.1:8443").replace(/\/$/, "");
+    this.token = opts.token ?? env.CHANGEWARD_EXECUTOR_TOKEN ?? "";
     this.f = opts.fetch ?? fetch;
   }
 
@@ -55,7 +55,7 @@ export class Client {
     const text = await res.text();
     const data = text ? JSON.parse(text) : null;
     if (!res.ok) {
-      const Err = res.status === 409 ? Conflict : ChangegateError;
+      const Err = res.status === 409 ? Conflict : ChangewardError;
       throw new Err(data?.error ?? data?.reason ?? res.statusText, res.status, data ?? {});
     }
     return data as T;
@@ -119,12 +119,12 @@ export class Change {
   }
   async undo(withDependents = false): Promise<Change[]> {
     const res = await this.client.call<{ undone?: ChangeRecord[]; dependents?: ChangeRecord[] }>("POST", `/v1/changes/${encodeURIComponent(this.id)}/undo`, { with_dependents: withDependents });
-    if (res?.dependents?.length) throw new ChangegateError(`later changes depend on this one: ${res.dependents.map((d) => d.id).join(", ")}`, 0, res);
+    if (res?.dependents?.length) throw new ChangewardError(`later changes depend on this one: ${res.dependents.map((d) => d.id).join(", ")}`, 0, res);
     return (res?.undone ?? []).map((c) => new Change(this.client, c));
   }
 }
 
-/** Wrap a function that returns an operation (e.g. SQL): Changegate plans it and applies it when policy auto-approves. */
+/** Wrap a function that returns an operation (e.g. SQL): Changeward plans it and applies it when policy auto-approves. */
 export function guarded<A extends unknown[]>(session: () => Session | Promise<Session>, fn: (...args: A) => string | Promise<string>, opts: { intent?: string; apply?: boolean } = {}) {
   return async (...args: A): Promise<Change> => {
     const change = await (await session()).propose(await fn(...args), { intent: opts.intent ?? fn.name });
@@ -152,7 +152,7 @@ export async function applyWithInterrupt(change: Change, interrupt: (value: unkn
   await change.refresh();
   if (change.state === "rejected") throw new Denied(change);
   if (change.needsApproval) {
-    const answer = await interrupt({ changegate: { change_id: change.id, plan_id: change.record.plan?.id, diff: change.diff, reasons: change.reasons, inline: change.inline } });
+    const answer = await interrupt({ changeward: { change_id: change.id, plan_id: change.record.plan?.id, diff: change.diff, reasons: change.reasons, inline: change.inline } });
     if (change.inline) {
       await change.confirm(Boolean(answer), "langgraph-interrupt");
       if (!answer) throw new Denied(change);

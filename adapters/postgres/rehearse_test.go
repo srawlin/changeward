@@ -6,7 +6,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/srawlin/changegate/pkg/adapter"
+	"github.com/srawlin/changeward/pkg/adapter"
 )
 
 func TestRehearseMigrations(t *testing.T) {
@@ -86,7 +86,7 @@ func TestRehearseCommands(t *testing.T) {
 	}
 	eachServer(t, func(t *testing.T, admin string) {
 		up := `psql "$DATABASE_URL" -q -v ON_ERROR_STOP=1 -c "CREATE TABLE IF NOT EXISTS widgets (id int PRIMARY KEY)" -c "ALTER TABLE widgets ADD COLUMN IF NOT EXISTS color text"`
-		down := `test "$CHANGEGATE_NEW_MIGRATIONS" = "{n}" && psql "$DATABASE_URL" -q -v ON_ERROR_STOP=1 -c "ALTER TABLE widgets DROP COLUMN color"`
+		down := `test "$CHANGEWARD_NEW_MIGRATIONS" = "{n}" && psql "$DATABASE_URL" -q -v ON_ERROR_STOP=1 -c "ALTER TABLE widgets DROP COLUMN color"`
 		rep, err := RehearseMigrations(context.Background(), RehearsalOptions{AdminDSN: admin, Commands: &Commands{Up: up, Down: down}}, nil,
 			[]MigrationInput{{ID: "20240101", Framework: "rails", Name: "add_color", Path: "db/migrate/20240101_add_color.rb", HasDown: true}})
 		if err != nil {

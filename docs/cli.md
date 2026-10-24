@@ -1,15 +1,15 @@
 # CLI reference
 
-Generated from `changegate --help` by `scripts/gen-cli-docs.sh`. Every command also accepts `--json`
+Generated from `changeward --help` by `scripts/gen-cli-docs.sh`. Every command also accepts `--json`
 for machine-readable output.
 
-## `changegate adapter`
+## `changeward adapter`
 
 ```text
 Adapter tools
 
 Usage:
-  changegate adapter [command]
+  changeward adapter [command]
 
 Available Commands:
   test        Run the adapter conformance suite
@@ -19,21 +19,21 @@ Flags:
 
 ```
 
-### `changegate adapter test`
+### `changeward adapter test`
 
 ```text
 Run the conformance suite against a built-in adapter or a plugin binary.
 
-  changegate adapter test postgres --dsn postgres://admin@localhost/postgres
-  changegate adapter test toykv
-  changegate adapter test --plugin ./changegate-adapter-foo --config path=/tmp/x
+  changeward adapter test postgres --dsn postgres://admin@localhost/postgres
+  changeward adapter test toykv
+  changeward adapter test --plugin ./changeward-adapter-foo --config path=/tmp/x
 
 The Postgres driver creates and drops scratch databases on the server; the
 DSN must be able to CREATE DATABASE. Plugins take part through the
-changegate.fingerprint and changegate.corpus Plan conventions.
+changeward.fingerprint and changeward.corpus Plan conventions.
 
 Usage:
-  changegate adapter test [postgres|toykv] [flags]
+  changeward adapter test [postgres|toykv] [flags]
 
 Flags:
       --config stringArray   plugin target config key=value ({tmp} expands to a scratch path)
@@ -45,13 +45,13 @@ Flags:
 
 ```
 
-## `changegate apply`
+## `changeward apply`
 
 ```text
 Apply an approved change (REF: plan ID, change ID, or #seq)
 
 Usage:
-  changegate apply REF [flags]
+  changeward apply REF [flags]
 
 Flags:
   -h, --help   help for apply
@@ -59,30 +59,30 @@ Flags:
 
 ```
 
-## `changegate approve`
+## `changeward approve`
 
 ```text
 Approve a pending change (binds to its exact plan hash)
 
 Usage:
-  changegate approve REF [flags]
+  changeward approve REF [flags]
 
 Flags:
       --as string         approver identity (local mode; server mode uses SSO)
       --channel string    approval channel (default "terminal")
-      --executor string   approve on a shared executor (default $CHANGEGATE_EXECUTOR_URL; token from $CHANGEGATE_EXECUTOR_TOKEN, approve role)
+      --executor string   approve on a shared executor (default $CHANGEWARD_EXECUTOR_URL; token from $CHANGEWARD_EXECUTOR_TOKEN, approve role)
   -h, --help              help for approve
       --reason string     reason
 
 ```
 
-## `changegate audit`
+## `changeward audit`
 
 ```text
 Inspect and verify the tamper-evident audit log
 
 Usage:
-  changegate audit [command]
+  changeward audit [command]
 
 Available Commands:
   log         Print audit events
@@ -93,13 +93,13 @@ Flags:
 
 ```
 
-### `changegate audit log`
+### `changeward audit log`
 
 ```text
 Print audit events
 
 Usage:
-  changegate audit log [flags]
+  changeward audit log [flags]
 
 Flags:
       --change string    filter by change ID
@@ -109,26 +109,26 @@ Flags:
 
 ```
 
-### `changegate audit verify`
+### `changeward audit verify`
 
 ```text
 Verify the event hash chain
 
 Usage:
-  changegate audit verify [flags]
+  changeward audit verify [flags]
 
 Flags:
   -h, --help   help for verify
 
 ```
 
-## `changegate branch`
+## `changeward branch`
 
 ```text
 Work on a private branch of a target (branch-as-working-target)
 
 Usage:
-  changegate branch [command]
+  changeward branch [command]
 
 Available Commands:
   create      Create a branch of the session's target and point the session at it
@@ -139,13 +139,13 @@ Flags:
 
 ```
 
-### `changegate branch create`
+### `changeward branch create`
 
 ```text
 Create a branch of the session's target and point the session at it
 
 Usage:
-  changegate branch create [SESSION] [flags]
+  changeward branch create [SESSION] [flags]
 
 Flags:
   -h, --help          help for create
@@ -153,26 +153,26 @@ Flags:
 
 ```
 
-### `changegate branch discard`
+### `changeward branch discard`
 
 ```text
 Drop the session's branch
 
 Usage:
-  changegate branch discard [SESSION] [flags]
+  changeward branch discard [SESSION] [flags]
 
 Flags:
   -h, --help   help for discard
 
 ```
 
-## `changegate changeset`
+## `changeward changeset`
 
 ```text
 Plan and apply ordered changes across systems as a saga (failed step → earlier steps undone)
 
 Usage:
-  changegate changeset [command]
+  changeward changeset [command]
 
 Available Commands:
   apply       Apply every step in order; on failure undo the steps already applied
@@ -184,20 +184,20 @@ Flags:
 
 ```
 
-### `changegate changeset apply`
+### `changeward changeset apply`
 
 ```text
 Apply every step in order; on failure undo the steps already applied
 
 Usage:
-  changegate changeset apply ID [flags]
+  changeward changeset apply ID [flags]
 
 Flags:
   -h, --help   help for apply
 
 ```
 
-### `changegate changeset plan`
+### `changeward changeset plan`
 
 ```text
 Plan a changeset. Example:
@@ -215,7 +215,7 @@ Every step is planned against current state, so steps that depend on each
 other's effects on the same target belong in one multi-statement step.
 
 Usage:
-  changegate changeset plan -f CHANGESET.yaml [flags]
+  changeward changeset plan -f CHANGESET.yaml [flags]
 
 Flags:
   -f, --file string   changeset file
@@ -223,26 +223,26 @@ Flags:
 
 ```
 
-### `changegate changeset undo`
+### `changeward changeset undo`
 
 ```text
 Undo an applied changeset, last step first
 
 Usage:
-  changegate changeset undo ID [flags]
+  changeward changeset undo ID [flags]
 
 Flags:
   -h, --help   help for undo
 
 ```
 
-## `changegate checkpoint`
+## `changeward checkpoint`
 
 ```text
 Checkpoint the current session's target
 
 Usage:
-  changegate checkpoint [flags]
+  changeward checkpoint [flags]
 
 Flags:
   -h, --help             help for checkpoint
@@ -251,16 +251,16 @@ Flags:
 
 ```
 
-## `changegate connect`
+## `changeward connect`
 
 ```text
-Register a target in changegate.yaml. The environment class is bound to the
+Register a target in changeward.yaml. The environment class is bound to the
 connection, never chosen by the agent: personal, shared-dev, staging, prod, prod-restricted.
 
 Use ${VAR} in --dsn to keep secrets out of the file, e.g. --dsn '${DATABASE_URL}'.
 
 Usage:
-  changegate connect NAME [flags]
+  changeward connect NAME [flags]
 
 Flags:
       --adapter string       adapter (default "postgres")
@@ -273,13 +273,13 @@ Flags:
 
 ```
 
-## `changegate detect`
+## `changeward detect`
 
 ```text
 Detect agent provenance of the commits in a change (bots, trailers, branches)
 
 Usage:
-  changegate detect [flags]
+  changeward detect [flags]
 
 Flags:
       --base-ref string   base ref (commits in base..HEAD are inspected)
@@ -287,16 +287,16 @@ Flags:
 
 ```
 
-## `changegate drift`
+## `changeward drift`
 
 ```text
 List sessions in the given environment classes that applied direct changes
 to Postgres or Kubernetes targets without a promotion or reconciliation PR
-(changegate promote/reconcile). Run it from cron or CI to enforce that
+(changeward promote/reconcile). Run it from cron or CI to enforce that
 break-glass changes reach Git within a time limit.
 
 Usage:
-  changegate drift [flags]
+  changeward drift [flags]
 
 Flags:
       --env string         environment classes to check (default "staging,prod,prod-restricted")
@@ -305,13 +305,13 @@ Flags:
 
 ```
 
-## `changegate exec`
+## `changeward exec`
 
 ```text
 Plan and, if policy allows, apply a change in one step
 
 Usage:
-  changegate exec [SQL] [flags]
+  changeward exec [SQL] [flags]
 
 Flags:
   -f, --file string      read SQL from FILE ('-' for stdin)
@@ -324,13 +324,13 @@ Flags:
 
 ```
 
-## `changegate executor`
+## `changeward executor`
 
 ```text
 Run or configure a shared executor (holds target credentials; enforces policy next to the target)
 
 Usage:
-  changegate executor [command]
+  changeward executor [command]
 
 Available Commands:
   serve       Serve the executor API
@@ -341,15 +341,15 @@ Flags:
 
 ```
 
-### `changegate executor serve`
+### `changeward executor serve`
 
 ```text
-Serve the executor API for MCP servers, CLIs and SDKs (changegate mcp postgres --executor URL).
-Tokens are configured under executor.tokens in changegate.yaml; the token's name is the delegating human.
+Serve the executor API for MCP servers, CLIs and SDKs (changeward mcp postgres --executor URL).
+Tokens are configured under executor.tokens in changeward.yaml; the token's name is the delegating human.
 Serve TLS directly (--tls-cert/--tls-key) or behind a TLS-terminating proxy.
 
 Usage:
-  changegate executor serve [flags]
+  changeward executor serve [flags]
 
 Flags:
       --addr string       listen address (default "127.0.0.1:8443")
@@ -359,13 +359,13 @@ Flags:
 
 ```
 
-### `changegate executor token`
+### `changeward executor token`
 
 ```text
 Create an API token (prints the token once, and the config entry to add)
 
 Usage:
-  changegate executor token NAME [flags]
+  changeward executor token NAME [flags]
 
 Flags:
   -h, --help           help for token
@@ -373,7 +373,7 @@ Flags:
 
 ```
 
-## `changegate gate`
+## `changeward gate`
 
 ```text
 Apply policy to rehearsal evidence. Exit codes: 0 approved (standard change),
@@ -384,28 +384,28 @@ With --github or --gitlab, approvals on the pull/merge request that satisfy
 "review required" (named user: approvers, quorum, never the author) pass the gate.
 
 Usage:
-  changegate gate EVIDENCE.json [flags]
+  changeward gate EVIDENCE.json [flags]
 
 Flags:
       --env string    override the environment class (e.g. the deployment environment)
       --github        count GitHub pull request approvals toward "review required" (GitHub Actions env, GITHUB_TOKEN)
-      --gitlab        count GitLab merge request approvals toward "review required" (CHANGEGATE_GITLAB_TOKEN)
+      --gitlab        count GitLab merge request approvals toward "review required" (CHANGEWARD_GITLAB_TOKEN)
   -h, --help          help for gate
       --report-only   never fail; just print the decision
 
 ```
 
-## `changegate hook`
+## `changeward hook`
 
 ```text
 Coding-agent hooks (called by the agent, not by people)
 
 Usage:
-  changegate hook [command]
+  changeward hook [command]
 
 Available Commands:
   check       Evaluate a shell command for any agent; exit 2 means blocked
-  claude-code Claude Code PreToolUse hook: route direct database changes through Changegate
+  claude-code Claude Code PreToolUse hook: route direct database changes through Changeward
   codex       Codex PreToolUse hook (same wire format as Claude Code)
   cursor      Cursor beforeShellExecution hook
   gemini      Gemini CLI BeforeTool hook (shell commands); prints {decision: deny}
@@ -415,78 +415,78 @@ Flags:
 
 ```
 
-### `changegate hook check`
+### `changeward hook check`
 
 ```text
 Evaluate a shell command for any agent; exit 2 means blocked
 
 Usage:
-  changegate hook check COMMAND [flags]
+  changeward hook check COMMAND [flags]
 
 Flags:
   -h, --help   help for check
 
 ```
 
-### `changegate hook claude-code`
+### `changeward hook claude-code`
 
 ```text
-Claude Code PreToolUse hook: route direct database changes through Changegate
+Claude Code PreToolUse hook: route direct database changes through Changeward
 
 Usage:
-  changegate hook claude-code [flags]
+  changeward hook claude-code [flags]
 
 Flags:
   -h, --help   help for claude-code
 
 ```
 
-### `changegate hook codex`
+### `changeward hook codex`
 
 ```text
 Codex PreToolUse hook (same wire format as Claude Code)
 
 Usage:
-  changegate hook codex [flags]
+  changeward hook codex [flags]
 
 Flags:
   -h, --help   help for codex
 
 ```
 
-### `changegate hook cursor`
+### `changeward hook cursor`
 
 ```text
 Cursor beforeShellExecution hook
 
 Usage:
-  changegate hook cursor [flags]
+  changeward hook cursor [flags]
 
 Flags:
   -h, --help   help for cursor
 
 ```
 
-### `changegate hook gemini`
+### `changeward hook gemini`
 
 ```text
 Gemini CLI BeforeTool hook (shell commands); prints {decision: deny}
 
 Usage:
-  changegate hook gemini [flags]
+  changeward hook gemini [flags]
 
 Flags:
   -h, --help   help for gemini
 
 ```
 
-## `changegate install`
+## `changeward install`
 
 ```text
-Install Changegate into a coding agent (claude-code, codex, cursor, gemini, opencode, agents-md)
+Install Changeward into a coding agent (claude-code, codex, cursor, gemini, opencode, agents-md)
 
 Usage:
-  changegate install AGENT [flags]
+  changeward install AGENT [flags]
 
 Flags:
   -h, --help            help for install
@@ -494,13 +494,13 @@ Flags:
 
 ```
 
-## `changegate k8s`
+## `changeward k8s`
 
 ```text
 Kubernetes and GitOps (Argo CD, Flux) integration
 
 Usage:
-  changegate k8s [command]
+  changeward k8s [command]
 
 Available Commands:
   gate        GitOps gate: plan desired manifests against the live cluster; pass only if policy approves this exact plan
@@ -510,20 +510,20 @@ Flags:
 
 ```
 
-### `changegate k8s gate`
+### `changeward k8s gate`
 
 ```text
 Plan the manifests a sync would apply (server-side dry run against live objects) and apply
 policy in the CI lane. Exit 0 when auto-approved or when this exact plan hash was approved
-(e.g. with changegate approve, Slack or the web UI); exit 2 while approval is pending; exit 3
+(e.g. with changeward approve, Slack or the web UI); exit 2 while approval is pending; exit 3
 when denied. Run it in CI on GitOps-repository pull requests, or as an Argo CD PreSync hook
-Job (see integrations/argocd). Changegate never applies here: the GitOps controller does.
+Job (see integrations/argocd). Changeward never applies here: the GitOps controller does.
 
 Usage:
-  changegate k8s gate --manifests DIR [flags]
+  changeward k8s gate --manifests DIR [flags]
 
 Flags:
-      --executor string    run the gate on a shared executor ($CHANGEGATE_EXECUTOR_URL; token in $CHANGEGATE_EXECUTOR_TOKEN)
+      --executor string    run the gate on a shared executor ($CHANGEWARD_EXECUTOR_URL; token in $CHANGEWARD_EXECUTOR_TOKEN)
   -h, --help               help for gate
       --manifests string   manifest file or directory (rendered YAML)
       --out string         write the plan diff here (for PR comments)
@@ -531,13 +531,13 @@ Flags:
 
 ```
 
-## `changegate log`
+## `changeward log`
 
 ```text
 Show a session's timeline (default: current session)
 
 Usage:
-  changegate log [SESSION] [flags]
+  changeward log [SESSION] [flags]
 
 Flags:
       --all    show recent sessions
@@ -545,35 +545,35 @@ Flags:
 
 ```
 
-## `changegate mcp`
+## `changeward mcp`
 
 ```text
 Run a local MCP server that gives an agent plan → approve → apply → undo tools
 for a target instead of raw execution. Credentials stay in this process.
 
 Add to an MCP client, e.g. Claude Code's .mcp.json:
-  {"mcpServers": {"changegate": {"command": "changegate", "args": ["mcp", "postgres", "--target", "app"]}}}
+  {"mcpServers": {"changeward": {"command": "changeward", "args": ["mcp", "postgres", "--target", "app"]}}}
 
 Usage:
-  changegate mcp ADAPTER [flags]
+  changeward mcp ADAPTER [flags]
 
 Flags:
       --branch            work on a private branch of the target
       --checkpoint        checkpoint the target when the session starts
-      --executor string   use a shared executor at this URL ($CHANGEGATE_EXECUTOR_URL); token from $CHANGEGATE_EXECUTOR_TOKEN
+      --executor string   use a shared executor at this URL ($CHANGEWARD_EXECUTOR_URL); token from $CHANGEWARD_EXECUTOR_TOKEN
   -h, --help              help for mcp
       --session string    attach to an existing session instead of starting one
   -t, --target string     target (default: the default target)
 
 ```
 
-## `changegate migrations`
+## `changeward migrations`
 
 ```text
 Detect migration frameworks and list migrations
 
 Usage:
-  changegate migrations [flags]
+  changeward migrations [flags]
 
 Flags:
       --dir string   repository root (default: git top level)
@@ -581,7 +581,7 @@ Flags:
 
 ```
 
-## `changegate plan`
+## `changeward plan`
 
 ```text
 Without a target (or with --static), plan analyzes SQL statically: statement
@@ -591,7 +591,7 @@ rolled-back transaction, records the proposal, and applies policy.
 Exit codes: 0 auto-approved (or static), 2 approval required, 3 denied.
 
 Usage:
-  changegate plan [SQL] [flags]
+  changeward plan [SQL] [flags]
 
 Flags:
   -f, --file string      read SQL from FILE ('-' for stdin)
@@ -604,50 +604,50 @@ Flags:
 
 ```
 
-## `changegate policy`
+## `changeward policy`
 
 ```text
 Manage CEL change-control policy
 
 Usage:
-  changegate policy [command]
+  changeward policy [command]
 
 Available Commands:
   check       Compile a policy file and report errors
-  init        Write changegate.policy.yaml with the built-in defaults as a starting point
+  init        Write changeward.policy.yaml with the built-in defaults as a starting point
 
 Flags:
   -h, --help   help for policy
 
 ```
 
-### `changegate policy check`
+### `changeward policy check`
 
 ```text
 Compile a policy file and report errors
 
 Usage:
-  changegate policy check [FILE] [flags]
+  changeward policy check [FILE] [flags]
 
 Flags:
   -h, --help   help for check
 
 ```
 
-### `changegate policy init`
+### `changeward policy init`
 
 ```text
-Write changegate.policy.yaml with the built-in defaults as a starting point
+Write changeward.policy.yaml with the built-in defaults as a starting point
 
 Usage:
-  changegate policy init [flags]
+  changeward policy init [flags]
 
 Flags:
   -h, --help   help for init
 
 ```
 
-## `changegate promote`
+## `changeward promote`
 
 ```text
 Promote converts the applied changes of a direct-lane session into a migration
@@ -660,7 +660,7 @@ session timeline as evidence; Lane A then rehearses and gates it.
 Writable frameworks: golang-migrate, goose, flyway, liquibase, atlas, prisma, sqitch, rails, django, alembic
 
 Usage:
-  changegate promote [SESSION] [flags]
+  changeward promote [SESSION] [flags]
 
 Flags:
       --base string        base branch for the PR (default: the repository default)
@@ -675,18 +675,18 @@ Flags:
 
 ```
 
-## `changegate proxy`
+## `changeward proxy`
 
 ```text
 Wrap an existing stdio MCP server. Known SQL tools (execute_sql, query, ...)
 are rewritten when --target names a Postgres target: reads pass through to the
-upstream server, writes are planned, approved and applied by Changegate.
+upstream server, writes are planned, approved and applied by Changeward.
 Other non-read-only tools get approval-only handling under --env policy.
 
-  changegate proxy --target app -- npx -y @modelcontextprotocol/server-postgres $DATABASE_URL
+  changeward proxy --target app -- npx -y @modelcontextprotocol/server-postgres $DATABASE_URL
 
 Usage:
-  changegate proxy [flags] -- COMMAND [ARGS...]
+  changeward proxy [flags] -- COMMAND [ARGS...]
 
 Flags:
       --env string         environment class for other tools (default "personal")
@@ -697,7 +697,7 @@ Flags:
 
 ```
 
-## `changegate reconcile`
+## `changeward reconcile`
 
 ```text
 Promote converts the applied changes of a direct-lane session into a migration
@@ -710,7 +710,7 @@ session timeline as evidence; Lane A then rehearses and gates it.
 Writable frameworks: golang-migrate, goose, flyway, liquibase, atlas, prisma, sqitch, rails, django, alembic
 
 Usage:
-  changegate reconcile [SESSION] [flags]
+  changeward reconcile [SESSION] [flags]
 
 Flags:
       --base string        base branch for the PR (default: the repository default)
@@ -725,29 +725,29 @@ Flags:
 
 ```
 
-## `changegate rehearse`
+## `changeward rehearse`
 
 ```text
-Rehearse the migrations a change adds (Lane A). Changegate builds a throwaway
+Rehearse the migrations a change adds (Lane A). Changeward builds a throwaway
 copy, replays base migrations (T0) or clones a database (--from-database,
 --neon), optionally generates synthetic data (T1), then applies each new
 migration, observing locks, table rewrites and rows touched; runs the down
 migrations in reverse; and compares catalog and data checksums with the state
 before each migration. Policy is applied to the evidence for --env.
 
-  changegate rehearse --base-ref origin/main --dsn postgres://postgres@localhost/postgres --out evidence.json
+  changeward rehearse --base-ref origin/main --dsn postgres://postgres@localhost/postgres --out evidence.json
 
 Exit codes: 0 rehearsal ran (see the report and gate), 1 a migration failed.
 
 Usage:
-  changegate rehearse [flags]
+  changeward rehearse [flags]
 
 Flags:
       --all                     treat every migration as new (rehearse the whole history)
       --base-ref string         git ref of the base branch; migrations changed since it are new
       --dir string              repository root (default: git top level)
       --down-cmd string         command that rolls back {n} migrations
-      --dsn string              admin DSN of a scratch server (default: $CHANGEGATE_REHEARSAL_DSN)
+      --dsn string              admin DSN of a scratch server (default: $CHANGEWARD_REHEARSAL_DSN)
       --env string              environment class the change will deploy to (for policy) (default "prod")
       --framework string        migration framework (default: detected)
       --from-database string    clone this database (golden image or clone) instead of replaying base migrations
@@ -767,30 +767,30 @@ Flags:
 
 ```
 
-## `changegate reject`
+## `changeward reject`
 
 ```text
 Reject a pending change
 
 Usage:
-  changegate reject REF [flags]
+  changeward reject REF [flags]
 
 Flags:
       --as string         approver identity (local mode; server mode uses SSO)
       --channel string    approval channel (default "terminal")
-      --executor string   approve on a shared executor (default $CHANGEGATE_EXECUTOR_URL; token from $CHANGEGATE_EXECUTOR_TOKEN, approve role)
+      --executor string   approve on a shared executor (default $CHANGEWARD_EXECUTOR_URL; token from $CHANGEWARD_EXECUTOR_TOKEN, approve role)
   -h, --help              help for reject
       --reason string     reason
 
 ```
 
-## `changegate report`
+## `changeward report`
 
 ```text
 Render rehearsal evidence as a PR/MR comment (and post it)
 
 Usage:
-  changegate report EVIDENCE.json [flags]
+  changeward report EVIDENCE.json [flags]
 
 Flags:
       --github   post to the GitHub pull request (GitHub Actions env)
@@ -800,13 +800,13 @@ Flags:
 
 ```
 
-## `changegate restore`
+## `changeward restore`
 
 ```text
 Restore a checkpoint (discards everything after it)
 
 Usage:
-  changegate restore CHECKPOINT [flags]
+  changeward restore CHECKPOINT [flags]
 
 Flags:
   -h, --help             help for restore
@@ -815,13 +815,13 @@ Flags:
 
 ```
 
-## `changegate rewind`
+## `changeward rewind`
 
 ```text
 Undo every change in a session, newest first (or restore its start checkpoint)
 
 Usage:
-  changegate rewind [SESSION] [flags]
+  changeward rewind [SESSION] [flags]
 
 Flags:
       --checkpoint   restore the session checkpoint if an undo fails
@@ -830,13 +830,13 @@ Flags:
 
 ```
 
-## `changegate sensitive`
+## `changeward sensitive`
 
 ```text
 Manage sensitive-column redaction
 
 Usage:
-  changegate sensitive [command]
+  changeward sensitive [command]
 
 Available Commands:
   suggest     Suggest columns to redact, using Jev on table/column names and types only (never values)
@@ -846,16 +846,16 @@ Flags:
 
 ```
 
-### `changegate sensitive suggest`
+### `changeward sensitive suggest`
 
 ```text
 Ask TypeSafe's Jev, for every column of the target, whether its name and type suggest
 personal or secret data. Only schema names and types are sent; row values are never read.
 Suggestions can only add redaction. With --apply they are merged into the target's
-sensitive list in changegate.yaml. Requires $TYPESAFE_API_KEY.
+sensitive list in changeward.yaml. Requires $TYPESAFE_API_KEY.
 
 Usage:
-  changegate sensitive suggest [flags]
+  changeward sensitive suggest [flags]
 
 Flags:
       --apply             add the suggestions to the target's sensitive list
@@ -865,7 +865,7 @@ Flags:
 
 ```
 
-## `changegate serve`
+## `changeward serve`
 
 ```text
 Serve HTTP endpoints for out-of-band approvals:
@@ -874,11 +874,11 @@ Serve HTTP endpoints for out-of-band approvals:
   GET  /changes/{ref}        change record (JSON, plan config redacted)
   GET  /healthz
 
-Configure approvals.slack in changegate.yaml (bot_token, channel, signing_secret,
+Configure approvals.slack in changeward.yaml (bot_token, channel, signing_secret,
 users). Slack must reach this address, e.g. through your ingress or a tunnel.
 
 Usage:
-  changegate serve [flags]
+  changeward serve [flags]
 
 Flags:
       --addr string   listen address (default "127.0.0.1:8484")
@@ -886,13 +886,13 @@ Flags:
 
 ```
 
-## `changegate session`
+## `changeward session`
 
 ```text
 Manage direct-lane sessions
 
 Usage:
-  changegate session [command]
+  changeward session [command]
 
 Available Commands:
   end         End a session
@@ -905,39 +905,39 @@ Flags:
 
 ```
 
-### `changegate session end`
+### `changeward session end`
 
 ```text
 End a session
 
 Usage:
-  changegate session end [SESSION] [flags]
+  changeward session end [SESSION] [flags]
 
 Flags:
   -h, --help   help for end
 
 ```
 
-### `changegate session list`
+### `changeward session list`
 
 ```text
 List recent sessions
 
 Usage:
-  changegate session list [flags]
+  changeward session list [flags]
 
 Flags:
   -h, --help   help for list
 
 ```
 
-### `changegate session start`
+### `changeward session start`
 
 ```text
 Start a session (optionally with a checkpoint, or on a private branch)
 
 Usage:
-  changegate session start [flags]
+  changeward session start [flags]
 
 Flags:
       --agent string      agent name (e.g. claude-code)
@@ -949,65 +949,65 @@ Flags:
 
 ```
 
-### `changegate session use`
+### `changeward session use`
 
 ```text
 Make SESSION the current session
 
 Usage:
-  changegate session use SESSION [flags]
+  changeward session use SESSION [flags]
 
 Flags:
   -h, --help   help for use
 
 ```
 
-## `changegate show`
+## `changeward show`
 
 ```text
 Show a change record
 
 Usage:
-  changegate show REF [flags]
+  changeward show REF [flags]
 
 Flags:
   -h, --help   help for show
 
 ```
 
-## `changegate status`
+## `changeward status`
 
 ```text
 Print a change's state
 
 Usage:
-  changegate status REF [flags]
+  changeward status REF [flags]
 
 Flags:
   -h, --help   help for status
 
 ```
 
-## `changegate targets`
+## `changeward targets`
 
 ```text
 List configured targets
 
 Usage:
-  changegate targets [flags]
+  changeward targets [flags]
 
 Flags:
   -h, --help   help for targets
 
 ```
 
-## `changegate tf`
+## `changeward tf`
 
 ```text
 Terraform/OpenTofu in CI (Lane A)
 
 Usage:
-  changegate tf [command]
+  changeward tf [command]
 
 Available Commands:
   review      Classify a plan (terraform show -json) for review and gate it with policy
@@ -1017,7 +1017,7 @@ Flags:
 
 ```
 
-### `changegate tf review`
+### `changeward tf review`
 
 ```text
 Review a plan produced by your pipeline (terraform plan -out p && terraform show -json p > plan.json).
@@ -1026,7 +1026,7 @@ Every resource change is classified; destroying or replacing a stateful resource
 CI lane. Exit codes: 0 approved, 2 review required, 3 denied.
 
 Usage:
-  changegate tf review --plan-json FILE [flags]
+  changeward tf review --plan-json FILE [flags]
 
 Flags:
       --env string              environment class the plan applies to (default "prod")
@@ -1037,13 +1037,13 @@ Flags:
 
 ```
 
-## `changegate trash`
+## `changeward trash`
 
 ```text
 List or purge soft-dropped Postgres objects
 
 Usage:
-  changegate trash [command]
+  changeward trash [command]
 
 Available Commands:
   list        List soft-dropped tables and columns
@@ -1054,13 +1054,13 @@ Flags:
 
 ```
 
-### `changegate trash list`
+### `changeward trash list`
 
 ```text
 List soft-dropped tables and columns
 
 Usage:
-  changegate trash list [flags]
+  changeward trash list [flags]
 
 Flags:
   -h, --help            help for list
@@ -1068,13 +1068,13 @@ Flags:
 
 ```
 
-### `changegate trash purge`
+### `changeward trash purge`
 
 ```text
 Permanently drop soft-dropped objects (they can no longer be undone)
 
 Usage:
-  changegate trash purge [flags]
+  changeward trash purge [flags]
 
 Flags:
   -h, --help            help for purge
@@ -1083,13 +1083,13 @@ Flags:
 
 ```
 
-## `changegate ui`
+## `changeward ui`
 
 ```text
 Open the local web view of sessions, changes, diffs and audit events
 
 Usage:
-  changegate ui [flags]
+  changeward ui [flags]
 
 Flags:
       --addr string   listen address (localhost only) (default "127.0.0.1:8485")
@@ -1098,13 +1098,13 @@ Flags:
 
 ```
 
-## `changegate undo`
+## `changeward undo`
 
 ```text
 Undo a change (STEP is its number in the session; dependents are undone first)
 
 Usage:
-  changegate undo STEP|REF [flags]
+  changeward undo STEP|REF [flags]
 
 Flags:
   -h, --help             help for undo
@@ -1114,13 +1114,13 @@ Flags:
 
 ```
 
-## `changegate version`
+## `changeward version`
 
 ```text
 Print the version
 
 Usage:
-  changegate version [flags]
+  changeward version [flags]
 
 Flags:
   -h, --help   help for version

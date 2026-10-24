@@ -9,7 +9,7 @@ import (
 	"encoding/json"
 	"errors"
 
-	"github.com/srawlin/changegate/internal/model"
+	"github.com/srawlin/changeward/internal/model"
 )
 
 // ErrNotFound is returned when a record does not exist.

@@ -1,11 +1,11 @@
 // Package model holds the Change Record types shared by the engine and store.
-// They mirror proto/changegate/v1/change.proto.
+// They mirror proto/changeward/v1/change.proto.
 package model
 
 import (
 	"encoding/json"
 
-	"github.com/srawlin/changegate/pkg/adapter"
+	"github.com/srawlin/changeward/pkg/adapter"
 )
 
 // State is a change lifecycle state.

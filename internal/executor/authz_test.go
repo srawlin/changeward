@@ -8,16 +8,16 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/srawlin/changegate/internal/engine"
-	"github.com/srawlin/changegate/internal/policy"
-	"github.com/srawlin/changegate/internal/session"
-	"github.com/srawlin/changegate/internal/store"
-	"github.com/srawlin/changegate/pkg/adapter"
+	"github.com/srawlin/changeward/internal/engine"
+	"github.com/srawlin/changeward/internal/policy"
+	"github.com/srawlin/changeward/internal/session"
+	"github.com/srawlin/changeward/internal/store"
+	"github.com/srawlin/changeward/pkg/adapter"
 )
 
 func TestAuthz(t *testing.T) {
 	dir := t.TempDir()
-	st, _ := store.OpenSQLite(filepath.Join(dir, "cg.db"))
+	st, _ := store.OpenSQLite(filepath.Join(dir, "cw.db"))
 	defer func() { _ = st.Close() }()
 	pol, _ := policy.New(nil)
 	eng := &engine.Engine{Store: st, Adapters: engine.MapRegistry{}, Policy: pol}
@@ -28,8 +28,8 @@ func TestAuthz(t *testing.T) {
 	call := func(env, body string) int {
 		req, _ := http.NewRequest("POST", srv.URL+"/v1/authz/mcp", strings.NewReader(body))
 		req.Header.Set("Authorization", "Bearer "+tok)
-		req.Header.Set("x-changegate-env", env)
-		req.Header.Set("x-changegate-server", "postgres-mcp")
+		req.Header.Set("x-changeward-env", env)
+		req.Header.Set("x-changeward-server", "postgres-mcp")
 		resp, err := http.DefaultClient.Do(req)
 		if err != nil {
 			t.Fatal(err)
@@ -52,17 +52,17 @@ func TestAuthz(t *testing.T) {
 			t.Errorf("case %d: %d, want %d", i, got, c.want)
 		}
 	}
-	// Envoy ext_authz style: original path appended, token in x-changegate-token, client's own Authorization kept.
+	// Envoy ext_authz style: original path appended, token in x-changeward-token, client's own Authorization kept.
 	req, _ := http.NewRequest("POST", srv.URL+"/v1/authz/mcp/mcp/messages", strings.NewReader(`{"method":"tools/call","params":{"name":"execute_sql","arguments":{"sql":"TRUNCATE t"}}}`))
-	req.Header.Set("Authorization", "Bearer client-token-not-for-changegate")
-	req.Header.Set("X-Changegate-Token", tok)
+	req.Header.Set("Authorization", "Bearer client-token-not-for-changeward")
+	req.Header.Set("X-Changeward-Token", tok)
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
 		t.Fatal(err)
 	}
 	_ = resp.Body.Close()
-	if resp.StatusCode != 403 || resp.Header.Get("x-changegate-decision") != "deny" {
-		t.Fatalf("envoy-style request: %d %s", resp.StatusCode, resp.Header.Get("x-changegate-decision"))
+	if resp.StatusCode != 403 || resp.Header.Get("x-changeward-decision") != "deny" {
+		t.Fatalf("envoy-style request: %d %s", resp.StatusCode, resp.Header.Get("x-changeward-decision"))
 	}
 	// Tools the gateway declares read-only pass; denials are JSON-RPC errors.
 	for _, c := range []struct {
@@ -70,9 +70,9 @@ func TestAuthz(t *testing.T) {
 		code     int
 	}{{"echo,get-*", 200}, {"get-*", 403}, {"", 403}} {
 		req, _ := http.NewRequest("POST", srv.URL+"/v1/authz/mcp/mcp", strings.NewReader(`{"jsonrpc":"2.0","id":9,"method":"tools/call","params":{"name":"echo","arguments":{}}}`))
-		req.Header.Set("X-Changegate-Token", tok)
-		req.Header.Set("X-Changegate-Env", "personal")
-		req.Header.Set("X-Changegate-Read-Only-Tools", c.readOnly)
+		req.Header.Set("X-Changeward-Token", tok)
+		req.Header.Set("X-Changeward-Env", "personal")
+		req.Header.Set("X-Changeward-Read-Only-Tools", c.readOnly)
 		resp, err := http.DefaultClient.Do(req)
 		if err != nil {
 			t.Fatal(err)
@@ -89,14 +89,14 @@ func TestAuthz(t *testing.T) {
 		if resp.StatusCode != c.code {
 			t.Fatalf("read-only %q: %d", c.readOnly, resp.StatusCode)
 		}
-		if c.code == 403 && (out.ID != 9 || out.Error.Code != -32001 || !strings.Contains(out.Error.Message, "Changegate")) {
+		if c.code == 403 && (out.ID != 9 || out.Error.Code != -32001 || !strings.Contains(out.Error.Message, "Changeward")) {
 			t.Fatalf("denial must be a JSON-RPC error for the call: %+v", out)
 		}
 	}
 	// MCP's GET (SSE stream) and DELETE (end session) pass; tokens are still required.
 	for _, m := range []string{"GET", "DELETE"} {
 		req, _ := http.NewRequest(m, srv.URL+"/v1/authz/mcp/mcp", nil)
-		req.Header.Set("X-Changegate-Token", tok)
+		req.Header.Set("X-Changeward-Token", tok)
 		resp, err := http.DefaultClient.Do(req)
 		if err != nil {
 			t.Fatal(err)

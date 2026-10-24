@@ -9,32 +9,32 @@ import (
 	"testing"
 	"time"
 
-	"github.com/srawlin/changegate/adapters/kubernetes"
-	"github.com/srawlin/changegate/internal/engine"
-	"github.com/srawlin/changegate/internal/model"
-	"github.com/srawlin/changegate/internal/policy"
-	"github.com/srawlin/changegate/internal/session"
-	"github.com/srawlin/changegate/internal/store"
-	"github.com/srawlin/changegate/pkg/adapter"
+	"github.com/srawlin/changeward/adapters/kubernetes"
+	"github.com/srawlin/changeward/internal/engine"
+	"github.com/srawlin/changeward/internal/model"
+	"github.com/srawlin/changeward/internal/policy"
+	"github.com/srawlin/changeward/internal/session"
+	"github.com/srawlin/changeward/internal/store"
+	"github.com/srawlin/changeward/pkg/adapter"
 )
 
 func TestGitOpsGateOverExecutor(t *testing.T) {
-	if exec.Command("kubectl", "--context=kind-changegate", "version", "--request-timeout=3s").Run() != nil {
-		t.Skip("no kind-changegate cluster")
+	if exec.Command("kubectl", "--context=kind-changeward", "version", "--request-timeout=3s").Run() != nil {
+		t.Skip("no kind-changeward cluster")
 	}
-	ns := fmt.Sprintf("cg-gate-%d", time.Now().UnixNano())
-	_ = exec.Command("kubectl", "--context=kind-changegate", "create", "ns", ns).Run()
+	ns := fmt.Sprintf("cw-gate-%d", time.Now().UnixNano())
+	_ = exec.Command("kubectl", "--context=kind-changeward", "create", "ns", ns).Run()
 	defer func() {
-		_ = exec.Command("kubectl", "--context=kind-changegate", "delete", "ns", ns, "--wait=false").Run()
+		_ = exec.Command("kubectl", "--context=kind-changeward", "delete", "ns", ns, "--wait=false").Run()
 	}()
 	ctx := context.Background()
 	dir := t.TempDir()
-	st, _ := store.OpenSQLite(filepath.Join(dir, "cg.db"))
+	st, _ := store.OpenSQLite(filepath.Join(dir, "cw.db"))
 	defer func() { _ = st.Close() }()
 	pf, _ := policy.Parse([]byte("rules:\n  - {name: review, when: 'change.lane == \"ci\"', decide: require, channel: out-of-band}\n"))
 	pol, _ := policy.New(pf)
 	eng := &engine.Engine{Store: st, Adapters: engine.MapRegistry{"kubernetes": kubernetes.New()}, Policy: pol}
-	tg := adapter.Target{Name: "cluster", Adapter: "kubernetes", Env: "prod", Config: map[string]string{"context": "kind-changegate", "namespace": ns}}
+	tg := adapter.Target{Name: "cluster", Adapter: "kubernetes", Env: "prod", Config: map[string]string{"context": "kind-changeward", "namespace": ns}}
 	svc := &session.Service{Engine: eng, Store: st, StateDir: dir, Resolve: func(string) (adapter.Target, error) { return tg, nil }}
 	ciTok, ci := NewToken("argocd", []string{RolePropose})
 	sreTok, sre := NewToken("sre", []string{RoleApprove})

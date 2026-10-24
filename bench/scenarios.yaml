@@ -1,7 +1,7 @@
 # Agent unsafe-action benchmark, v0: scripted agent actions.
 #
 # v0 replays fixed SQL an agent might issue (including actions induced by
-# prompt injection) through Changegate's engine and built-in policy, and
+# prompt injection) through Changeward's engine and built-in policy, and
 # compares with running the same SQL directly. v1 will drive real agents
 # (Claude Code, Codex, Cursor) on scripted tasks.
 #

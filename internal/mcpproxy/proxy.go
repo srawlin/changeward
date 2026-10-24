@@ -1,8 +1,8 @@
-// Package mcpproxy wraps any MCP server (`changegate proxy -- <command>`).
+// Package mcpproxy wraps any MCP server (`changeward proxy -- <command>`).
 //
 //   - Tools a known adapter understands (e.g. a third-party Postgres server's
 //     execute_sql) are rewritten: reads pass through to the upstream server;
-//     writes become plan → approve → apply through Changegate's executor,
+//     writes become plan → approve → apply through Changeward's executor,
 //     which holds its own credentials for the target.
 //   - Unknown tools are classified by their MCP annotations. Read-only tools
 //     pass through. Others get approval-only handling: they are recorded as
@@ -21,12 +21,12 @@ import (
 	"time"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
-	"github.com/srawlin/changegate/adapters/postgres"
-	"github.com/srawlin/changegate/internal/engine"
-	"github.com/srawlin/changegate/internal/mcpserver"
-	"github.com/srawlin/changegate/internal/model"
-	"github.com/srawlin/changegate/internal/policy"
-	"github.com/srawlin/changegate/pkg/adapter"
+	"github.com/srawlin/changeward/adapters/postgres"
+	"github.com/srawlin/changeward/internal/engine"
+	"github.com/srawlin/changeward/internal/mcpserver"
+	"github.com/srawlin/changeward/internal/model"
+	"github.com/srawlin/changeward/internal/policy"
+	"github.com/srawlin/changeward/pkg/adapter"
 )
 
 // DefaultSQLTools are tool names of popular database MCP servers whose
@@ -38,7 +38,7 @@ var sqlArgNames = []string{"sql", "query", "statement", "sql_query", "command"}
 
 // Proxy is an MCP proxy in front of one upstream server.
 type Proxy struct {
-	Inner   *mcpserver.Server // Changegate tools and the SQL target ("" target disables SQL rewriting)
+	Inner   *mcpserver.Server // Changeward tools and the SQL target ("" target disables SQL rewriting)
 	Command []string          // upstream server command
 	// SQLTools overrides DefaultSQLTools.
 	SQLTools []string
@@ -55,9 +55,9 @@ type Proxy struct {
 // Start connects to the upstream server and builds the proxy server.
 func (p *Proxy) Start(ctx context.Context) (*mcp.Server, error) {
 	if len(p.Command) == 0 {
-		return nil, errors.New("proxy: upstream command is required (changegate proxy -- <command> [args])")
+		return nil, errors.New("proxy: upstream command is required (changeward proxy -- <command> [args])")
 	}
-	client := mcp.NewClient(&mcp.Implementation{Name: "changegate-proxy", Version: p.Version}, nil)
+	client := mcp.NewClient(&mcp.Implementation{Name: "changeward-proxy", Version: p.Version}, nil)
 	cmd := exec.CommandContext(ctx, p.Command[0], p.Command[1:]...)
 	cs, err := client.Connect(ctx, &mcp.CommandTransport{Command: cmd}, nil)
 	if err != nil {
@@ -74,9 +74,9 @@ func (p *Proxy) Start(ctx context.Context) (*mcp.Server, error) {
 		p.Env = adapter.EnvPersonal
 	}
 	p.tools = map[string]*mcp.Tool{}
-	srv := mcp.NewServer(&mcp.Implementation{Name: "changegate-proxy", Title: "Changegate proxy for " + p.Name, Version: p.Version}, &mcp.ServerOptions{
-		Instructions: "This server is wrapped by Changegate. Write operations are previewed, decided by policy and may need approval; " +
-			"every change is logged and SQL changes can be undone with changegate_undo_change.",
+	srv := mcp.NewServer(&mcp.Implementation{Name: "changeward-proxy", Title: "Changeward proxy for " + p.Name, Version: p.Version}, &mcp.ServerOptions{
+		Instructions: "This server is wrapped by Changeward. Write operations are previewed, decided by policy and may need approval; " +
+			"every change is logged and SQL changes can be undone with changeward_undo_change.",
 	})
 	var cursor string
 	for {
@@ -94,7 +94,7 @@ func (p *Proxy) Start(ctx context.Context) (*mcp.Server, error) {
 		cursor = res.NextCursor
 	}
 	if p.Inner != nil {
-		p.Inner.AddChangegateTools(srv, "changegate_")
+		p.Inner.AddChangewardTools(srv, "changeward_")
 	}
 	return srv, nil
 }
@@ -153,11 +153,11 @@ func (p *Proxy) isSQLTool(t *mcp.Tool) (string, bool) {
 func (p *Proxy) wrapTool(t *mcp.Tool) *mcp.Tool {
 	w := *t
 	if _, ok := p.isSQLTool(t); ok {
-		w.Description = strings.TrimSpace(t.Description + " (Changegate: writes are previewed, policy-checked and undoable; reads pass through.)")
+		w.Description = strings.TrimSpace(t.Description + " (Changeward: writes are previewed, policy-checked and undoable; reads pass through.)")
 		return &w
 	}
 	if !readOnly(t) {
-		w.Description = strings.TrimSpace(t.Description + " (Changegate: requires approval per policy; logged; not undoable.)")
+		w.Description = strings.TrimSpace(t.Description + " (Changeward: requires approval per policy; logged; not undoable.)")
 	}
 	return &w
 }
@@ -193,7 +193,7 @@ func capResult(r *mcp.CallToolResult) *mcp.CallToolResult {
 		if tc, ok := c.(*mcp.TextContent); ok {
 			total += len(tc.Text)
 			if total > maxPassThroughBytes {
-				tc.Text = tc.Text[:max(0, len(tc.Text)-(total-maxPassThroughBytes))] + "\n[changegate: result truncated]"
+				tc.Text = tc.Text[:max(0, len(tc.Text)-(total-maxPassThroughBytes))] + "\n[changeward: result truncated]"
 				r.Content = r.Content[:i+1]
 				break
 			}
@@ -208,12 +208,12 @@ func (p *Proxy) handler(t *mcp.Tool) mcp.ToolHandler {
 			var m map[string]any
 			_ = json.Unmarshal(req.Params.Arguments, &m)
 			sql, _ := m[arg].(string)
-			if strings.HasPrefix(req.Params.RequestState, "changegate:") {
+			if strings.HasPrefix(req.Params.RequestState, "changeward:") {
 				return p.Inner.ProposeAndApply(ctx, req, sql, "via "+t.Name)
 			}
 			_, stmts, err := postgres.Classify(sql)
 			if err != nil {
-				return errResult("changegate: %v", err), nil
+				return errResult("changeward: %v", err), nil
 			}
 			reads := true
 			for _, s := range stmts {
@@ -244,13 +244,13 @@ func (p *Proxy) handler(t *mcp.Tool) mcp.ToolHandler {
 // gated handles a non-read-only tool without a known adapter: approval-only.
 func (p *Proxy) gated(ctx context.Context, req *mcp.CallToolRequest, t *mcp.Tool) (*mcp.CallToolResult, error) {
 	if p.Inner == nil {
-		return errResult("changegate: no engine configured"), nil
+		return errResult("changeward: no engine configured"), nil
 	}
 	eng := p.Inner.Engine
 	var c *model.Change
 	var err error
-	if st := req.Params.RequestState; strings.HasPrefix(st, "changegate:") {
-		c, err = eng.Get(ctx, strings.TrimPrefix(st, "changegate:"))
+	if st := req.Params.RequestState; strings.HasPrefix(st, "changeward:") {
+		c, err = eng.Get(ctx, strings.TrimPrefix(st, "changeward:"))
 	} else {
 		sess, serr := p.Inner.EnsureSession(ctx, req)
 		if serr != nil {
@@ -263,38 +263,38 @@ func (p *Proxy) gated(ctx context.Context, req *mcp.CallToolRequest, t *mcp.Tool
 		})
 	}
 	if err != nil {
-		return errResult("changegate: %v", err), nil
+		return errResult("changeward: %v", err), nil
 	}
 	switch c.State {
 	case model.Rejected:
-		return errResult("changegate: %s denied by policy: %s", t.Name, strings.Join(c.Decision.Reasons, "; ")), nil
+		return errResult("changeward: %s denied by policy: %s", t.Name, strings.Join(c.Decision.Reasons, "; ")), nil
 	case model.AwaitingApproval:
 		if c.Decision.Channel != policy.ChannelInline {
-			return errResult("changegate: %s needs out-of-band approval: `changegate approve %s` by someone other than the proposer, then call %s again",
-				t.Name, c.Plan.ID, "changegate_apply_change"), nil
+			return errResult("changeward: %s needs out-of-band approval: `changeward approve %s` by someone other than the proposer, then call %s again",
+				t.Name, c.Plan.ID, "changeward_apply_change"), nil
 		}
 		approved, asked, need := p.Inner.Elicit(req, c)
 		if need != nil {
-			need.RequestState = "changegate:" + c.Plan.ID
+			need.RequestState = "changeward:" + c.Plan.ID
 			return need, nil
 		}
 		if !asked {
-			return errResult("changegate: %s needs confirmation: run `changegate approve %s`, then call changegate_apply_change", t.Name, c.Plan.ID), nil
+			return errResult("changeward: %s needs confirmation: run `changeward approve %s`, then call changeward_apply_change", t.Name, c.Plan.ID), nil
 		}
 		if c, err = eng.Approve(ctx, c.ID, engine.ApproveRequest{PlanHash: c.Plan.Hash, Approver: p.Inner.Human, Channel: "mcp-elicitation", Approved: approved}); err != nil {
-			return errResult("changegate: %v", err), nil
+			return errResult("changeward: %v", err), nil
 		}
 		if !approved {
-			return errResult("changegate: the user declined %s", t.Name), nil
+			return errResult("changeward: the user declined %s", t.Name), nil
 		}
 	}
 	c, err = eng.Apply(ctx, c.ID, p.target(), p.Inner.Principal(req).Agent)
 	if err != nil {
-		return errResult("changegate: %v", err), nil
+		return errResult("changeward: %v", err), nil
 	}
 	var r mcp.CallToolResult
 	if err := json.Unmarshal([]byte(c.Receipt.Output), &r); err != nil {
-		return errResult("changegate: upstream result: %v", err), nil
+		return errResult("changeward: upstream result: %v", err), nil
 	}
 	return capResult(&r), nil
 }

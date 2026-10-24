@@ -1,6 +1,6 @@
 # Agent change control: technical and go-to-market plan
 
-*Working name: **Changegate** (check trademark and namespace availability before launch; several small GitHub repos use similar names). October 18, 2026. Companion to `agent-native-infrastructure.md` (bet #1: B7 change control, with C12 checkpoint/undo and C9 human approval).*
+*Working name: **Changeward** (check trademark and namespace availability before launch; several small GitHub repos use similar names). October 18, 2026. Companion to `agent-native-infrastructure.md` (bet #1: B7 change control, with C12 checkpoint/undo and C9 human approval).*
 
 ---
 
@@ -103,7 +103,7 @@ Most of an agent's working day is direct. Git is not in the loop for each step, 
 | Latency budget | Minutes (a CI run) | About a second to plan; non-blocking approvals |
 | How it's rehearsed | On a separate copy, tiers T0–T3 (§5.3) | Live dry-run in a rolled-back transaction, or a branch/copy above size or risk thresholds (§5.3, §7.1) |
 | Approval | Risk-routed: auto-approve, CODEOWNERS/DBA/SRE reviewers, ITSM change request | Risk- and environment-routed: auto in personal/dev, inline prompt, or out-of-band (Slack/web/ITSM) in prod |
-| Who applies | The existing CD tool; Changegate gates and verifies | Changegate's executor |
+| Who applies | The existing CD tool; Changeward gates and verifies | Changeward's executor |
 | Credentials | Already in the deploy path (OIDC, vault, GitOps) | Held by the executor, never the agent: local credentials in personal mode, just-in-time credentials in shared/prod |
 | Undo | Rehearsed rollback path (down migration, revert, Helm/Argo rollback, flag off) | Per-action undo handle, session rewind, cross-system checkpoints (§7.7) |
 | Evidence and audit | PR comment, check run, change record, ITSM ticket | Session timeline, change records, same audit chain |
@@ -165,7 +165,7 @@ The **Change Record** schema (JSON Schema and protobuf) is published as an open 
 
 ```
                           ┌──────────────────────────────────────────────────────────────────┐
-                          │                Changegate control plane (server mode)            │
+                          │                Changeward control plane (server mode)            │
                           │  API (REST + gRPC) · Change/Changeset state machine · Policy (CEL)│
                           │  Approval broker · Risk engine · Evidence store · Audit hash chain│
                           │  Integrations: GitHub App, GitLab app, ServiceNow, Slack/Teams     │
@@ -174,7 +174,7 @@ The **Change Record** schema (JSON Schema and protobuf) is published as an open 
              Lane A (CI/CD)       │                        │ Lane B (direct)          │ Rehearsal env providers
    ┌──────────────────────────────┴───┐      ┌─────────────┴───────────────┐   ┌──────┴─────────────────────────┐
    │ CI job / deploy job              │      │ Agent host                  │   │ DB branch (Neon/Supabase/      │
-   │  changegate CLI (GitHub Action,  │      │  MCP proxy / MCP server     │   │   pg template), ephemeral k8s  │
+   │  changeward CLI (GitHub Action,  │      │  MCP proxy / MCP server     │   │   pg template), ephemeral k8s  │
    │  GitLab CI component)            │      │  Claude Code / Codex / Cursor│   │   namespace, emulators (Jira,  │
    │  → plan · rehearse · report ·    │      │   hooks · Python/TS SDK     │   │   Maximo), Coder workspaces    │
    │    gate · apply · verify         │      └─────────────┬───────────────┘   └────────────────────────────────┘
@@ -193,7 +193,7 @@ The **Change Record** schema (JSON Schema and protobuf) is published as an open 
 
 1. **The executor goes where the credentials go.** In enterprises that means a CI deploy runner, a sidecar in the production network, or a Kubernetes operator. **The agent never holds target credentials** in the direct lane; the executor does. This alone is a strong security property.
 2. **Executors only dial out** to the control plane (the same model as Coder's workspace agent, GitHub self-hosted runners and Argo agent mode). No inbound ports in production.
-3. **Everything also runs without a server:** `changegate` in a CI job or on a laptop uses SQLite and local policy files. Server mode adds shared approvals, an organization-wide audit trail and the UI.
+3. **Everything also runs without a server:** `changeward` in a CI job or on a laptop uses SQLite and local policy files. Server mode adds shared approvals, an organization-wide audit trail and the UI.
 4. **It is Git-native where Git is the source of truth.** In Lane A we never apply changes the pipeline would apply anyway. We *produce evidence and gate*, and the existing CD tool still deploys. Integrate, don't replace.
 5. **Lane B is not a bypass.** Direct actions go through the same engine, policy, evidence and audit chain as Lane A. When a direct change touches a Git-managed system, reconciliation (§6.5) keeps Git the source of truth.
 6. **Local-first.** In personal mode the executor runs on the developer's machine, inside the MCP server or hook process, with the developer's own credentials and a local SQLite store. No server, account or network connection is needed. The same binary scales up to shared executors and server mode without changing how the agent calls it.
@@ -232,7 +232,7 @@ service Adapter {
 
 - **Capabilities are declared,** not assumed. An adapter may support only `Classify` and `Plan`, for example an approval-only adapter for an unknown SaaS. Policy uses capabilities to decide what can be auto-approved.
 - **Plugin transport** uses hashicorp/go-plugin (MPL-2.0, used as a library) or plain gRPC over a Unix socket. Adapters can be written in Go, TypeScript or Python.
-- A **conformance suite** (`changegate adapter test`) proves `Apply` then `Undo` restores identical state across a corpus of generated operations. Passing adapters get a "certified" badge, which gives community contributors a reason to submit.
+- A **conformance suite** (`changeward adapter test`) proves `Apply` then `Undo` restores identical state across a corpus of generated operations. Passing adapters get a "certified" badge, which gives community contributors a reason to submit.
 
 ---
 
@@ -241,25 +241,25 @@ service Adapter {
 ### 5.1 The flow
 
 ```
-Agent opens PR/MR ──► changegate detect (provenance: bot account, commit trailers, signed attestations)
+Agent opens PR/MR ──► changeward detect (provenance: bot account, commit trailers, signed attestations)
         │
         ▼
-CI: changegate plan        ── discovers artifacts in the diff: migrations, *.tf, k8s manifests, nginx conf, flag changes
-CI: changegate rehearse    ── provisions copies (DB branch from prod snapshot or masked clone, ephemeral namespace,
+CI: changeward plan        ── discovers artifacts in the diff: migrations, *.tf, k8s manifests, nginx conf, flag changes
+CI: changeward rehearse    ── provisions copies (DB branch from prod snapshot or masked clone, ephemeral namespace,
                               plan-only for terraform) → apply → verify → undo → compare → tear down
-CI: changegate report      ── PR comment + check run: effects, risk, reversibility, rehearsal evidence, required approvers
+CI: changeward report      ── PR comment + check run: effects, risk, reversibility, rehearsal evidence, required approvers
         │
         ▼
 Policy decision            ── low risk + reversible + rehearsed → auto-approve check (counts as "standard change")
                               otherwise → required reviewers (CODEOWNERS group, DBA, SRE), or a ServiceNow change request
         │ merge
         ▼
-CD (unchanged tool)        ── deploy job asks the changegate deployment gate (GitHub custom deployment protection rule /
+CD (unchanged tool)        ── deploy job asks the changeward deployment gate (GitHub custom deployment protection rule /
                               GitLab deployment approval or external status check) → allowed only if the evidence is
                               current, preconditions still hold (no drift), and the change window / freeze policy allows
         │
         ▼
-Post-deploy                ── changegate verify (post-conditions, health, SLO probes)
+Post-deploy                ── changeward verify (post-conditions, health, SLO probes)
                               → failure: automatic rollback via the rehearsed undo path (down migration, revert PR,
                                 Helm/Argo rollback, flag off), plus an incident note on the change record
 ```
@@ -268,7 +268,7 @@ Post-deploy                ── changegate verify (post-conditions, health, SL
 
 | Deliverable | Form | Notes |
 | --- | --- | --- |
-| **GitHub Action** `changegate/rehearse` | Marketplace action wrapping the CLI | The fastest path to users. Works with any GitHub-hosted or self-hosted runner. |
+| **GitHub Action** `changeward/rehearse` | Marketplace action wrapping the CLI | The fastest path to users. Works with any GitHub-hosted or self-hosted runner. |
 | **GitLab CI/CD component** | Published to the GitLab CI/CD Catalog | Same CLI; MR notes and pipeline status. |
 | **GitHub App** (server mode) | Check runs, PR comments, custom deployment protection rule | Needed for deployment gating and organization-wide policy. |
 | **GitLab integration** (server mode) | MR notes, external status checks, deployment approvals | Some features need paid GitLab tiers; document this. |
@@ -283,7 +283,7 @@ A rehearsal is only as good as how closely the copy matches the target. This sec
 - **Lane A** always rehearses on a **separate copy**: a migration must run forward, then backward, then be compared with the starting state, and some steps can't run inside a transaction (`CREATE INDEX CONCURRENTLY`, some type changes).
 - **Lane B** usually rehearses on the target itself inside a rolled-back transaction (§7.1). It moves to a separate copy from the same tiers when a change is too large, too risky or not transactional, and it can use a branch as the *working* target for a whole session (§6.3).
 
-**Principle:** Changegate never stores customer data or moves it outside the customer's boundary. It *orchestrates* copies that live inside the customer's environment, and **only results leave**.
+**Principle:** Changeward never stores customer data or moves it outside the customer's boundary. It *orchestrates* copies that live inside the customer's environment, and **only results leave**.
 
 #### 5.3.1 Fidelity tiers (databases; Postgres as the example)
 
@@ -339,7 +339,7 @@ GitHub/GitLab CI job ──► control plane ──► executor INSIDE the prod 
 - **Replay what's newer than the golden image.** Migrations merged since the image was built are applied to the clone first, so the rehearsal starts from what production will look like.
 - **Re-check at deploy time.** The deployment gate confirms production's schema version and key facts (e.g. row counts within tolerance) still match what was rehearsed. If not, it re-rehearses or blocks.
 - **Cost:** copy-on-write clones store only changed blocks and are destroyed after each run. A masked golden image costs a full copy per refresh cycle.
-- **Prior art and partner:** DBLab Engine already provides thin clones and a migration checker for CI. Changegate supports it as a T3 provider ("use DBLab clones"). Our additions are the forward–rollback–compare cycle, reversibility classes, agent awareness and deployment gating.
+- **Prior art and partner:** DBLab Engine already provides thin clones and a migration checker for CI. Changeward supports it as a T3 provider ("use DBLab clones"). Our additions are the forward–rollback–compare cycle, reversibility classes, agent awareness and deployment gating.
 
 #### 5.3.5 Other target types
 
@@ -358,7 +358,7 @@ Lane B covers every case where an agent acts on a live system itself. It's desig
 ### 6.1 The flow
 
 ```
-Agent session starts ──► changegate session start   (optional checkpoint: DB branch/template, git ref, k8s dump)
+Agent session starts ──► changeward session start   (optional checkpoint: DB branch/template, git ref, k8s dump)
         │
         ▼
 Agent calls a tool  ──► classify (read → pass through, with result size limits)
@@ -385,13 +385,13 @@ Session ends  ──► summary · undo any step · rewind to checkpoint · prom
 
 ### 6.2 Integration surfaces, in priority order
 
-1. **Our own MCP server per adapter** (e.g. `changegate mcp postgres`). It exposes agent-friendly tools: `query` (read-only), `propose_change` (returns a plan ID and a human-readable diff), `apply_change(plan_id)`, `undo_change(receipt_id)`, `checkpoint`, `restore`. Tool annotations are set correctly (`readOnlyHint`, `destructiveHint`, `idempotentHint`), so hosts like Codex gate them appropriately.
-2. **MCP proxy mode** (`changegate proxy -- <any MCP server command>`): wraps *any* existing MCP server, over stdio or HTTP.
+1. **Our own MCP server per adapter** (e.g. `changeward mcp postgres`). It exposes agent-friendly tools: `query` (read-only), `propose_change` (returns a plan ID and a human-readable diff), `apply_change(plan_id)`, `undo_change(receipt_id)`, `checkpoint`, `restore`. Tool annotations are set correctly (`readOnlyHint`, `destructiveHint`, `idempotentHint`), so hosts like Codex gate them appropriately.
+2. **MCP proxy mode** (`changeward proxy -- <any MCP server command>`): wraps *any* existing MCP server, over stdio or HTTP.
    - For tools a known adapter understands (e.g. the `execute_sql` tool of a third-party Postgres MCP server), calls are rewritten into plan → approve → apply.
    - For unknown tools, it classifies using annotations and policy. Destructive calls get **approval-only** handling (no preview available), are labelled `irreversible` unless a compensation manifest exists, and are fully logged.
-3. **Agent hooks** for coding agents that support pre-tool hooks (e.g. Claude Code's `PreToolUse`; similar hooks where other hosts support them). They intercept shell commands like `psql -c`, `kubectl apply/delete`, `terraform apply`, `helm upgrade` and `nginx -s reload`, and redirect them through the gate. Install with `changegate install claude-code` and similar.
+3. **Agent hooks** for coding agents that support pre-tool hooks (e.g. Claude Code's `PreToolUse`; similar hooks where other hosts support them). They intercept shell commands like `psql -c`, `kubectl apply/delete`, `terraform apply`, `helm upgrade` and `nginx -s reload`, and redirect them through the gate. Install with `changeward install claude-code` and similar.
 4. **Python and TypeScript SDKs** for custom agents: wrap tool functions with `@guarded(adapter="postgres")`. Integrations for LangGraph interrupts, the OpenAI Agents SDK and the Claude Agent SDK map approvals onto the framework's own human-in-the-loop primitives.
-5. **Gateway integrations:** an agentgateway external-policy/processing hook, an IBM ContextForge plugin (Python), Docker MCP Gateway (check its current extension points), and an Envoy `ext_proc` filter. These place Changegate behind the gateways enterprises already run (B2).
+5. **Gateway integrations:** an agentgateway external-policy/processing hook, an IBM ContextForge plugin (Python), Docker MCP Gateway (check its current extension points), and an Envoy `ext_proc` filter. These place Changeward behind the gateways enterprises already run (B2).
 
 ### 6.3 Environment modes and credentials
 
@@ -404,7 +404,7 @@ Session ends  ──► summary · undo any step · rewind to checkpoint · prom
 | `prod-restricted` | PCI/regulated systems | Read-only by default; writes only through Lane A or explicit break-glass | Quorum *(commercial)* | As `prod`, plus session recording |
 
 - **Branch as the working target.** For personal and shared-dev work, a session can start by creating a database branch (Neon, DBLab, template DB) and pointing the agent at it. The agent then works freely with no approvals on the branch, and the result is promoted or discarded at the end. This is often the best developer experience: real data shape, zero risk, one decision at the end.
-- **Environment class comes from the connection, not the agent.** It's set in the connection config (`changegate connect postgres://… --env prod`) or by the organization's server. The agent can't relabel production as `personal`.
+- **Environment class comes from the connection, not the agent.** It's set in the connection config (`changeward connect postgres://… --env prod`) or by the organization's server. The agent can't relabel production as `personal`.
 - **Preventing bypass.** If the agent also has raw credentials, it can go around the gate. Mitigations: credentials live only in the executor; hooks block raw `psql`/`kubectl` invocations against registered targets; network policy (e.g. Coder Agent Firewall/`boundary`, Kubernetes network policy) limits what the agent's process can reach directly.
 
 ### 6.4 Sessions, timeline and undo
@@ -412,16 +412,16 @@ Session ends  ──► summary · undo any step · rewind to checkpoint · prom
 The session is to Lane B what the PR is to Lane A: the unit people review and reason about.
 
 ```
-$ changegate log
+$ changeward log
 SESSION s_7f3a  agent=claude-code  user=steve  env=personal  target=pg://localhost/app   checkpoint=cp_19
   #1  10:02  ALTER TABLE orders ADD COLUMN region text         reversible     applied
   #2  10:03  UPDATE orders SET region = … (48,211 rows)        reversible     applied
   #3  10:05  CREATE INDEX orders_region_idx …                  reversible     applied
   #4  10:09  DELETE FROM orders_archive WHERE … (3,104 rows)   reversible     applied (soft: before-images kept)
 
-$ changegate undo 4            # undo one step (guarded: only if rows still match their after-image)
-$ changegate rewind s_7f3a     # undo the whole session in reverse order, or restore cp_19
-$ changegate promote s_7f3a    # turn #1–#3 into a migration file + PR (§6.5)
+$ changeward undo 4            # undo one step (guarded: only if rows still match their after-image)
+$ changeward rewind s_7f3a     # undo the whole session in reverse order, or restore cp_19
+$ changeward promote s_7f3a    # turn #1–#3 into a migration file + PR (§6.5)
 ```
 
 - **Dependency-aware undo.** Undoing #1 (the column) requires undoing #2 and #3 first. The CLI shows the dependency chain and asks.
@@ -432,14 +432,14 @@ $ changegate promote s_7f3a    # turn #1–#3 into a migration file + PR (§6.5)
 
 **Promotion (dev → PR).** When a session in `personal` or `shared-dev` produced something worth keeping:
 
-1. `changegate promote` groups the session's schema changes and translates them into the project's own migration framework, detected from the repository (Flyway/Liquibase/Atlas SQL files, Prisma/Rails/Django/Alembic migrations). Data changes become seed scripts or one-off data migrations, if the user chooses.
+1. `changeward promote` groups the session's schema changes and translates them into the project's own migration framework, detected from the repository (Flyway/Liquibase/Atlas SQL files, Prisma/Rails/Django/Alembic migrations). Data changes become seed scripts or one-off data migrations, if the user chooses.
 2. It generates the **down** migration from the recorded undo handles, so the rollback path is known to work: it was exercised (or can be exercised) in the session.
 3. It opens a PR with the session timeline and evidence attached, and Lane A takes over: rehearsal at the policy-required tier, review, deployment gate.
 
 **Reconciliation (prod direct → Git).** When a `prod` direct change touches a system that Git manages (schema with migrations, Kubernetes under GitOps, Terraform-managed resources):
 
 1. The executor records the change as usual.
-2. Changegate opens a **reconciliation PR** expressing the change as code (migration, manifest change, Terraform update or `import` block) and links it to the incident or ticket.
+2. Changeward opens a **reconciliation PR** expressing the change as code (migration, manifest change, Terraform update or `import` block) and links it to the incident or ticket.
 3. Policy can require that reconciliation PRs are merged within a time limit; open ones are reported as drift.
 
 GitOps controllers (Argo CD, Flux) would otherwise revert a direct Kubernetes change on their next sync. The Kubernetes adapter detects GitOps ownership and either pauses auto-sync for that object during the incident (with policy approval) or refuses the direct change and redirects it to Lane A.
@@ -456,9 +456,9 @@ GitOps controllers (Argo CD, Flux) would otherwise revert a direct Kubernetes ch
 
 | Deliverable | Form | Notes |
 | --- | --- | --- |
-| **`changegate mcp <adapter>`** | Local MCP server (stdio/HTTP) via `npx`/`uvx`/brew | The fastest path to individual developers; listed in MCP registries |
-| **`changegate proxy`** | Wraps any existing MCP server | Adds plan/approve/undo to tools people already use |
-| **Coding-agent integrations** | Claude Code plugin and hooks; Codex, Cursor and Gemini CLI configurations | One-command install: `changegate install claude-code` |
+| **`changeward mcp <adapter>`** | Local MCP server (stdio/HTTP) via `npx`/`uvx`/brew | The fastest path to individual developers; listed in MCP registries |
+| **`changeward proxy`** | Wraps any existing MCP server | Adds plan/approve/undo to tools people already use |
+| **Coding-agent integrations** | Claude Code plugin and hooks; Codex, Cursor and Gemini CLI configurations | One-command install: `changeward install claude-code` |
 | **Session CLI and local web view** | `log`, `undo`, `rewind`, `promote`, `checkpoint` | Open source; the core individual experience |
 | **Python/TypeScript SDKs** | `@guarded` wrappers; LangGraph, OpenAI Agents SDK, Claude Agent SDK integrations | For teams building custom and continuous agents |
 | **Shared executor** | Container / Helm chart / systemd service near the target | For team dev, staging and prod targets |
@@ -494,7 +494,7 @@ GitOps controllers (Argo CD, Flux) would otherwise revert a direct Kubernetes ch
 **Lane B, live DDL:**
 
 - Validate inside a rolled-back transaction (most Postgres DDL is transactional; flag `CREATE INDEX CONCURRENTLY` and similar).
-- **Soft-drop** for destructive DDL: `DROP TABLE t` becomes `ALTER TABLE t RENAME TO _cg_trash_t_<id>` with a retention TTL. `DROP COLUMN` becomes a rename plus `DROP` after retention when policy allows. This keeps the class `reversible` without full backups.
+- **Soft-drop** for destructive DDL: `DROP TABLE t` becomes `ALTER TABLE t RENAME TO _cw_trash_t_<id>` with a retention TTL. `DROP COLUMN` becomes a rename plus `DROP` after retention when policy allows. This keeps the class `reversible` without full backups.
 - Otherwise the change is `checkpoint-only` (requires a branch or snapshot, via Neon or cloud APIs) or `irreversible` (blocked in production by default).
 
 **Lane A, migrations:**
@@ -507,7 +507,7 @@ GitOps controllers (Argo CD, Flux) would otherwise revert a direct Kubernetes ch
 
 ### 7.2 Git and files (open source)
 
-- Checkpoint and restore of working trees via git refs (`refs/changegate/<cp>`), with Jujutsu operation-log support when present.
+- Checkpoint and restore of working trees via git refs (`refs/changeward/<cp>`), with Jujutsu operation-log support when present.
 - Mostly a *participant* rather than a headline feature, since coding agents already offer local file checkpoints. It provides the git layer of session checkpoints and `rewind` in Lane B, writes the files that promotion and reconciliation PRs contain (§6.5), and supplies provenance in Lane A.
 
 ### 7.3 Terraform / OpenTofu (open source)
@@ -592,7 +592,7 @@ The same policy file covers both lanes. A rule can target one lane (`change.lane
 | Agent tricked (prompt injection) into destructive changes | It can only *propose*. The executor holds credentials, and policy, out-of-band approval and reversibility gates decide. |
 | Approve one plan, apply another | Approvals bind to the plan hash; apply re-checks preconditions; plans expire. |
 | Agent approves its own change | Separation of duties; approver identity must differ from the proposer; in-band approvals disabled above low risk. |
-| Changegate itself compromised | Executors are least-privilege per target; control plane holds no target credentials; plugins are signed and verified; audit log is a hash chain with optional external anchoring. |
+| Changeward itself compromised | Executors are least-privilege per target; control plane holds no target credentials; plugins are signed and verified; audit log is a hash chain with optional external anchoring. |
 | Undo makes things worse (stale undo) | Guarded inverse operations apply only if current state matches the after-image; conflicts go to a human. |
 | Data exposure in plans and evidence | Row images are redacted by column tags; evidence retention policies; optional storage of hashes instead of values. |
 | Supply chain | Reproducible builds, SBOMs, Sigstore-signed releases, pinned dependencies (practices already used in the Foundry repo). |
@@ -621,10 +621,10 @@ The same policy file covers both lanes. A rule can target one lane (`change.lane
 **Repository layout (monorepo, Apache-2.0):**
 
 ```
-changegate/
+changeward/
   proto/                 # Change Record + Adapter service (buf)
   spec/                  # human-readable spec, JSON Schemas
-  cmd/changegate/        # CLI: plan, rehearse, report, gate, apply, verify, undo, proxy, mcp, serve, install
+  cmd/changeward/        # CLI: plan, rehearse, report, gate, apply, verify, undo, proxy, mcp, serve, install
   internal/engine/       # state machine, saga, risk, policy (CEL), evidence, audit chain
   internal/store/        # sqlite, postgres
   adapters/{postgres,git,k8s,terraform,nginx,openapi}/
@@ -634,7 +634,7 @@ changegate/
   deploy/{helm,compose,nix}/
 ```
 
-Commercial code lives in a **separate private repo** (`changegate-enterprise`) that builds signed plugin binaries and server modules against the public proto and SDK. The open-source repo never depends on it.
+Commercial code lives in a **separate private repo** (`changeward-enterprise`) that builds signed plugin binaries and server modules against the public proto and SDK. The open-source repo never depends on it.
 
 ---
 
@@ -642,7 +642,7 @@ Commercial code lives in a **separate private repo** (`changegate-enterprise`) t
 
 | Channel | Why it matters |
 | --- | --- |
-| `npx -y @changegate/cli`, `uvx changegate` (thin launchers that download the verified Go binary) | MCP client configs overwhelmingly use `npx`/`uvx`, so this is zero friction for agent users. |
+| `npx -y @changeward/cli`, `uvx changeward` (thin launchers that download the verified Go binary) | MCP client configs overwhelmingly use `npx`/`uvx`, so this is zero friction for agent users. |
 | Homebrew, `curl \| sh`, apt/rpm, OCI image, Helm chart, Nix flake | Developers, platform teams, air-gapped installs. |
 | **GitHub Marketplace Action** and **GitLab CI/CD Catalog component** | The main Lane A distribution, discoverable where CI is configured. |
 | **Official MCP Registry**, Docker MCP Catalog, community directories (Glama, PulseMCP, Smithery and others) | The main Lane B discovery path. |
@@ -689,14 +689,14 @@ This follows a familiar, community-accepted precedent: Grafana's enterprise data
 
 ## 13. Getting noticed: community strategy
 
-1. **Lead with a visceral, verifiable story.** "What would have saved the Replit database": a reproducible demo where an agent issues destructive SQL. Changegate shows the exact rows affected, requires approval, and undoes it in one command. Publish the scenario as a repo others can run.
+1. **Lead with a visceral, verifiable story.** "What would have saved the Replit database": a reproducible demo where an agent issues destructive SQL. Changeward shows the exact rows affected, requires approval, and undoes it in one command. Publish the scenario as a repo others can run.
 2. **Ship where the pain already is, in both lanes on the same day.**
-   - Lane B, for individuals: `npx @changegate/cli mcp postgres` or `changegate install claude-code`. The pitch is "let your agent touch your database without fear": every write previewed, a session timeline, `undo` and `rewind`, then `promote` to a PR. This is the broadest audience and spreads person to person.
+   - Lane B, for individuals: `npx @changeward/cli mcp postgres` or `changeward install claude-code`. The pitch is "let your agent touch your database without fear": every write previewed, a session timeline, `undo` and `rewind`, then `promote` to a PR. This is the broadest audience and spreads person to person.
    - Lane A, for teams: the GitHub Action that rehearses agent-written migrations, with a striking PR comment ("this migration locks `orders` for ~40s and its down migration doesn't restore column `legacy_id`: not reversible").
    - The bridge is the demo: an agent works directly on a branch database, the developer runs `promote`, and the resulting PR is rehearsed and gated by Lane A.
 3. **Be complementary, not competitive.** Ship integration PRs and docs for Atlas, Flyway/Liquibase, Squawk (use its rules as a static pre-check), Argo CD, Atlantis, Neon, Supabase, agentgateway and Coder. Proxy mode explicitly *wraps* popular MCP servers (Postgres MCP Pro, MCP Toolbox for Databases, DBHub, Supabase MCP) rather than replacing them.
 4. **Publish the open specification** (the Change Record and reversibility classes) and propose an MCP extension. Standards work gets attention from MCP and gateway maintainers.
-5. **Benchmarks as content:** an "agent unsafe-action benchmark" for databases. Run popular agents with and without Changegate on scripted risky tasks and prompt-injection scenarios, and publish the unsafe-action rate, time to undo and false-block rate.
+5. **Benchmarks as content:** an "agent unsafe-action benchmark" for databases. Run popular agents with and without Changeward on scripted risky tasks and prompt-injection scenarios, and publish the unsafe-action rate, time to undo and false-block rate.
 6. **Community venues:** r/PostgreSQL, r/devops, r/kubernetes, r/mcp, Hacker News (Show HN on launch day with the demo), Postgres conferences and Planet PostgreSQL, KubeCon and GitOpsCon, the MCP community (Discord, Dev Summit), and the Coder community.
 7. **A contributor on-ramp:** a "write an adapter in an afternoon" guide, the conformance badge, and "good first manifest" issues for compensation manifests of popular APIs.
 
@@ -708,7 +708,7 @@ Assumes 3 engineers (Go core and adapters; database specialist; integrations and
 
 | Milestone | Weeks | Scope | Exit criteria |
 | --- | --- | --- | --- |
-| **M0: Foundations** | 0–3 | Proto and spec v0; engine state machine; SQLite store; CEL policy; CLI skeleton; conformance harness; Postgres statement classifier (pg_query_go) | `changegate plan` works on SQL files; conformance runs on a toy adapter |
+| **M0: Foundations** | 0–3 | Proto and spec v0; engine state machine; SQLite store; CEL policy; CLI skeleton; conformance harness; Postgres statement classifier (pg_query_go) | `changeward plan` works on SQL files; conformance runs on a toy adapter |
 | **M1: Postgres, both lanes (public launch)** | 3–10 | **Lane B:** live DML plan/apply/undo with PG18 `RETURNING OLD/NEW` plus fallback; soft-drop DDL; local MCP server and MCP proxy; Claude Code plugin and hooks; sessions with `log`/`undo`/`rewind`; branch-as-working-target (template DB, Neon); `promote` to migration files for 3 frameworks; terminal, MCP elicitation and Slack approvals. **Lane A:** migration detection (Flyway, Liquibase, Atlas, Prisma, Rails, Django, Alembic, golang-migrate), rehearsal on template DB / Neon branch, PR report, GitHub Action, GitLab component. Packaging (`npx`/`uvx`/brew/OCI). Replit-style demo, benchmark v0. | Launch. ≥10 external issues or PRs; **Lane B:** ≥100 opt-in weekly active developer sessions and at least some real `undo` usage; **Lane A:** ≥25 repositories running the Action; 3 design partners (at least 1 enterprise with a CAB process) agree to pilot |
 | **M2: Infrastructure breadth** | 10–18 | **Both lanes:** Kubernetes (dry-run diff, undo handles; GitOps-ownership detection; Argo/Flux hooks); Terraform/OpenTofu classification; NGINX/Traefik; OpenAPI + compensation manifests; Changesets (saga); OTel export; MySQL adapter. **Lane B:** shared executor (Helm), Codex/Cursor/Gemini CLI integrations, Python/TS SDKs with framework integrations, local web timeline, promotion for Kubernetes manifests, reconciliation PRs. **Lane A:** agentgateway and ContextForge integrations | **Lane A:** a design partner runs it on real agent PRs for 4 weeks with a measured auto-approval rate and zero unsafe merges. **Lane B:** a design partner's team uses shared-dev/staging direct mode for 4 weeks; median plan latency under 1s; promote-to-PR used |
 | **M3: Enterprise server (first revenue)** | 18–30 | Server mode with web UI; SSO/RBAC; quorum approvals; hash-chain audit export. **Lane A:** GitHub App deployment protection rule; GitLab deployment gates; change windows. **Lane B:** organization-wide session view, environment pinning, out-of-band approval routing. **Commercial:** ServiceNow/JSM bridge (standard and emergency changes), just-in-time credential broker, break-glass workflow, session recording, SQL Server and Oracle adapters, masked-clone provisioning | First 2 paid contracts, at least one including production direct access (Lane B); ServiceNow pilot shows CAB volume reduced for agent changes |
@@ -727,7 +727,7 @@ Assumes 3 engineers (Go core and adapters; database specialist; integrations and
 - **Matrix testing:** Postgres 13–18 (fallback and `RETURNING OLD/NEW` paths), major migration frameworks, Kubernetes versions, Terraform and OpenTofu versions.
 - **Rehearsal fidelity tests:** compare rehearsal predictions (rows, locks, durations) with real applies in a staging fleet, and track the prediction error.
 - **Adversarial tests:** prompt-injection scenarios (in issue text, database rows, tool output) driving agents toward destructive actions; measure what gets through.
-- **Dogfooding:** use Changegate on its own infrastructure and on the Kose and Foundry migration pipelines.
+- **Dogfooding:** use Changeward on its own infrastructure and on the Kose and Foundry migration pipelines.
 
 ---
 

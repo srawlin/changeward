@@ -12,6 +12,6 @@
 
 Every agent gets the same model:
 
-- The agent **proposes**. Changegate **plans** with an exact dry run, and **policy decides**.
-- Changegate **applies** with an **undo** path.
-- A hook or plugin stops the agent from going around Changegate with raw `psql`, `kubectl` or `terraform`.
+- The agent **proposes**. Changeward **plans** with an exact dry run, and **policy decides**.
+- Changeward **applies** with an **undo** path.
+- A hook or plugin stops the agent from going around Changeward with raw `psql`, `kubectl` or `terraform`.
