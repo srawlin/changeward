@@ -80,10 +80,24 @@ func (a *Adapter) adminConn(ctx context.Context, t adapter.Target) (*pgx.Conn, s
 	return c, db, nil
 }
 
+// drainWait is how long otherConnections waits for sessions to go away.
+// Backends of a pool we just closed leave pg_stat_activity asynchronously.
+const drainWait = 2 * time.Second
+
 func otherConnections(ctx context.Context, c *pgx.Conn, db string) (int, error) {
-	var n int
-	err := c.QueryRow(ctx, `SELECT count(*) FROM pg_stat_activity WHERE datname = $1 AND pid <> pg_backend_pid()`, db).Scan(&n)
-	return n, err
+	deadline := time.Now().Add(drainWait)
+	for {
+		var n int
+		err := c.QueryRow(ctx, `SELECT count(*) FROM pg_stat_activity WHERE datname = $1 AND pid <> pg_backend_pid()`, db).Scan(&n)
+		if err != nil || n == 0 || time.Now().After(deadline) {
+			return n, err
+		}
+		select {
+		case <-ctx.Done():
+			return n, ctx.Err()
+		case <-time.After(50 * time.Millisecond):
+		}
+	}
 }
 
 // allowForce reports whether Changeward may terminate other sessions on the
