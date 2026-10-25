@@ -4,8 +4,8 @@ Agreed work that is not scheduled yet.
 
 ## Name and distribution
 
-- **changeward.com → GitHub.** Forward the domain to https://github.com/srawlin/changeward, and set it as the
-  repository's website. The repository stays the main site.
+- **changeward.com is live** (2026-10-25): the website and docs, from a separate repository, deployed on Cloudflare.
+  Still to do: set it as this repository's website on GitHub.
 - **Reserve package names before the first release.** On 2026-10-22 all of these were free:
   - npm: create the `changeward` organization (needed for `@changeward/cli` and `@changeward/sdk`), and the
     unscoped `changeward` package.
