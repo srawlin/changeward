@@ -1,6 +1,4 @@
-# Agent change control: technical and go-to-market plan
-
-*Working name: **Changeward** (check trademark and namespace availability before launch; several small GitHub repos use similar names). October 18, 2026. Companion to `agent-native-infrastructure.md` (bet #1: B7 change control, with C12 checkpoint/undo and C9 human approval).*
+# Agent change control: technical plan
 
 ---
 
@@ -654,71 +652,8 @@ Commercial code lives in a **separate private repo** (`changeward-enterprise`) t
 
 ---
 
-## 12. Open source and commercial model
 
-### 12.1 Boundary rule
-
-> **Open source:** everything an individual or a single team needs to make agent changes safe for **open-source systems**, in **both lanes**, plus the spec and SDKs.
-> **Commercial:** what an **enterprise** needs (organization-wide governance, compliance evidence, scale) and adapters for **proprietary systems**.
-
-This follows a familiar, community-accepted precedent: Grafana's enterprise data-source plugins for Splunk, ServiceNow, Oracle and others; Terraform providers vs. HCP features; Coder's Community vs. Premium.
-
-| Open source (Apache-2.0) | Commercial |
-| --- | --- |
-| Core engine, CLI, executor, SQLite/Postgres store | Server HA, multi-tenant organizations, retention controls |
-| Spec, protobuf, Python/TS SDKs, conformance suite | SSO/SAML, SCIM, fine-grained RBAC |
-| Adapters: Postgres, MySQL/MariaDB (phase 2), SQLite, Git/files, Kubernetes, Terraform/OpenTofu, NGINX/Traefik, NixOS, generic OpenAPI + community compensation manifests | Adapters: Oracle, SQL Server, Snowflake, Databricks, SAP HANA; cloud stateful-resource snapshot packs (AWS/Azure/GCP); SaaS packs (Salesforce, ServiceNow, Workday, Okta/Entra, Jira Cloud/DC, Zendesk, Maximo) |
-| GitHub Action, GitLab component, basic GitHub App (single repo or organization) | Enterprise GitHub App / GitLab deployment gates across many organizations; change windows and freezes; quorum approvals |
-| Approvals: terminal, MCP elicitation, Slack, GitHub comments | ServiceNow / Jira Service Management change bridge; standard-change auto-classification; PagerDuty incident mode |
-| Lane B for individuals and teams: local MCP server and proxy, coding-agent hooks, session timeline, `undo`/`rewind`, promote-to-PR, branch-as-working-target, shared executor | Lane B for organizations: just-in-time credential broker, break-glass workflow with ITSM emergency changes, enforced reconciliation and drift reporting, session recording and replay, organization-wide session view, continuous-agent budgets |
-| CEL policy | OPA/Cedar bridges with central policy distribution; policy simulation ("what would this have blocked last quarter?") |
-| Local web UI (single user) | Org dashboard, DORA-style metrics for agent changes, compliance evidence export (SOX/SOC 2/ISO change-management evidence), hash-chain anchoring |
-| Rehearsal tiers T0–T3 with Postgres template DBs, Neon branches, DBLab thin clones, kind/k3d; synthetic data generation | Managed T2 golden-image pipelines (masking + scheduled refresh) and cloud clone providers (Aurora, Azure, GCP); emulator-backed SaaS rehearsal (Jira, Maximo: C11); Coder-based rehearsal fleets |
-
-### 12.2 Licensing details
-
-- **Apache-2.0** with **DCO** sign-off. Commercial code is in a separate repo, so we don't need a CLA to relicense community contributions, which keeps contributors happy.
-- **Trademark policy** on the name and logo protects against confusing forks (the main defense if a large vendor packages the open-source core).
-- **Alternatives considered:**
-  - *AGPL for the core:* rejected. Gateway, CI and agent vendors avoid embedding AGPL code, which would cost us integrations, the best distribution channel.
-  - *FSL/BSL source-available:* rejected for the core because of community perception. It remains possible for the *server* later if a hosted-competitor threat appears.
-- **Commercial distribution:** signed plugin binaries plus a license key, verified **offline** (air-gapped friendly). Source escrow is available for regulated customers.
-- **Pricing hypothesis** (validate with design partners): per **protected system** per year (a database cluster, Kubernetes cluster, Terraform workspace or SaaS tenant), with organization tiers. Approvers are free, so seat pricing doesn't discourage involving reviewers.
-
----
-
-## 13. Getting noticed: community strategy
-
-1. **Lead with a visceral, verifiable story.** "What would have saved the Replit database": a reproducible demo where an agent issues destructive SQL. Changeward shows the exact rows affected, requires approval, and undoes it in one command. Publish the scenario as a repo others can run.
-2. **Ship where the pain already is, in both lanes on the same day.**
-   - Lane B, for individuals: `npx @changeward/cli mcp postgres` or `changeward install claude-code`. The pitch is "let your agent touch your database without fear": every write previewed, a session timeline, `undo` and `rewind`, then `promote` to a PR. This is the broadest audience and spreads person to person.
-   - Lane A, for teams: the GitHub Action that rehearses agent-written migrations, with a striking PR comment ("this migration locks `orders` for ~40s and its down migration doesn't restore column `legacy_id`: not reversible").
-   - The bridge is the demo: an agent works directly on a branch database, the developer runs `promote`, and the resulting PR is rehearsed and gated by Lane A.
-3. **Be complementary, not competitive.** Ship integration PRs and docs for Atlas, Flyway/Liquibase, Squawk (use its rules as a static pre-check), Argo CD, Atlantis, Neon, Supabase, agentgateway and Coder. Proxy mode explicitly *wraps* popular MCP servers (Postgres MCP Pro, MCP Toolbox for Databases, DBHub, Supabase MCP) rather than replacing them.
-4. **Publish the open specification** (the Change Record and reversibility classes) and propose an MCP extension. Standards work gets attention from MCP and gateway maintainers.
-5. **Benchmarks as content:** an "agent unsafe-action benchmark" for databases. Run popular agents with and without Changeward on scripted risky tasks and prompt-injection scenarios, and publish the unsafe-action rate, time to undo and false-block rate.
-6. **Community venues:** r/PostgreSQL, r/devops, r/kubernetes, r/mcp, Hacker News (Show HN on launch day with the demo), Postgres conferences and Planet PostgreSQL, KubeCon and GitOpsCon, the MCP community (Discord, Dev Summit), and the Coder community.
-7. **A contributor on-ramp:** a "write an adapter in an afternoon" guide, the conformance badge, and "good first manifest" issues for compensation manifests of popular APIs.
-
----
-
-## 14. Roadmap
-
-Assumes 3 engineers (Go core and adapters; database specialist; integrations and DX in TS/Python) plus a founder doing go-to-market.
-
-| Milestone | Weeks | Scope | Exit criteria |
-| --- | --- | --- | --- |
-| **M0: Foundations** | 0–3 | Proto and spec v0; engine state machine; SQLite store; CEL policy; CLI skeleton; conformance harness; Postgres statement classifier (pg_query_go) | `changeward plan` works on SQL files; conformance runs on a toy adapter |
-| **M1: Postgres, both lanes (public launch)** | 3–10 | **Lane B:** live DML plan/apply/undo with PG18 `RETURNING OLD/NEW` plus fallback; soft-drop DDL; local MCP server and MCP proxy; Claude Code plugin and hooks; sessions with `log`/`undo`/`rewind`; branch-as-working-target (template DB, Neon); `promote` to migration files for 3 frameworks; terminal, MCP elicitation and Slack approvals. **Lane A:** migration detection (Flyway, Liquibase, Atlas, Prisma, Rails, Django, Alembic, golang-migrate), rehearsal on template DB / Neon branch, PR report, GitHub Action, GitLab component. Packaging (`npx`/`uvx`/brew/OCI). Replit-style demo, benchmark v0. | Launch. ≥10 external issues or PRs; **Lane B:** ≥100 opt-in weekly active developer sessions and at least some real `undo` usage; **Lane A:** ≥25 repositories running the Action; 3 design partners (at least 1 enterprise with a CAB process) agree to pilot |
-| **M2: Infrastructure breadth** | 10–18 | **Both lanes:** Kubernetes (dry-run diff, undo handles; GitOps-ownership detection; Argo/Flux hooks); Terraform/OpenTofu classification; NGINX/Traefik; OpenAPI + compensation manifests; Changesets (saga); OTel export; MySQL adapter. **Lane B:** shared executor (Helm), Codex/Cursor/Gemini CLI integrations, Python/TS SDKs with framework integrations, local web timeline, promotion for Kubernetes manifests, reconciliation PRs. **Lane A:** agentgateway and ContextForge integrations | **Lane A:** a design partner runs it on real agent PRs for 4 weeks with a measured auto-approval rate and zero unsafe merges. **Lane B:** a design partner's team uses shared-dev/staging direct mode for 4 weeks; median plan latency under 1s; promote-to-PR used |
-| **M3: Enterprise server (first revenue)** | 18–30 | Server mode with web UI; SSO/RBAC; quorum approvals; hash-chain audit export. **Lane A:** GitHub App deployment protection rule; GitLab deployment gates; change windows. **Lane B:** organization-wide session view, environment pinning, out-of-band approval routing. **Commercial:** ServiceNow/JSM bridge (standard and emergency changes), just-in-time credential broker, break-glass workflow, session recording, SQL Server and Oracle adapters, masked-clone provisioning | First 2 paid contracts, at least one including production direct access (Lane B); ServiceNow pilot shows CAB volume reduced for agent changes |
-| **M4: C11/C12 tie-in** | 30–42 | Cross-system checkpoints; Coder rehearsal module; emulator-backed SaaS rehearsal (Jira from Kose, Maximo from Foundry); Snowflake/Databricks; cloud snapshot packs; Salesforce pack | Expansion revenue from adapter packs; rehearsal used for SaaS-admin agents at a design partner |
-
-**Explicitly out of scope for v1:** replacing CI/CD or GitOps tools, a hosted SaaS edition (later, if demand appears), our own agent, generic LLM-output guardrails.
-
----
-
-## 15. Testing and quality
+## 12. Testing and quality
 
 - **Correctness of undo is the product.** A wrong undo is worse than none. So:
   - **Property-based tests:** for generated operation sequences, `state₀ → apply → undo → state₀′`, then assert a table/catalog checksum match.
@@ -731,33 +666,6 @@ Assumes 3 engineers (Go core and adapters; database specialist; integrations and
 
 ---
 
-## 16. Metrics
-
-| Audience | Metric |
-| --- | --- |
-| Community traction | GitHub stars and forks (attention); external adapters and manifests contributed; **Lane A:** repositories running the Action/component; **Lane B:** MCP registry installs, opt-in weekly active sessions and executors |
-| Product value (both lanes) | Unsafe changes blocked; time to undo; rehearsal pass/fail; prediction accuracy; false-block rate; auto-approval rate of agent changes |
-| Lane B experience | Median plan latency; share of actions auto-approved per environment class; `undo`/`rewind` usage; sessions promoted to PRs; reconciliation PRs opened and merged on time; attempted bypasses blocked |
-| Enterprise outcomes | Change failure rate and time to restore for agent-authored changes vs. human-authored; review hours saved; CAB items avoided via standard-change classification |
-| Business | Design partners → paid conversions; protected systems per customer; adapter-pack attach rate |
-
----
-
-## 17. Risks and open questions
-
-| Risk | Mitigation / signal to watch |
-| --- | --- |
-| **Platforms absorb it:** GitHub, GitLab, Atlas/Bytebase or the hyperscalers add "agent PR risk checks" | Stay cross-system and cross-vendor; own the rehearsal evidence and the reversibility spec; integrate deeply with ITSM |
-| **Rehearsal fidelity disappoints** (copies aren't close enough to production) | Report fidelity explicitly; policy minimums; invest in masked-clone and branch provisioning |
-| **Friction:** teams disable gates that slow them down | Default to "report, don't block"; auto-approve verified low-risk changes; measure the false-block rate |
-| **Lane B friction:** approvals or latency slow agents, so developers switch it off or give agents raw credentials | Permissive `personal` defaults; branch-as-working-target (no approvals on a branch); sub-second plans; non-blocking approvals; batching. Track auto-approval share and latency as release blockers |
-| **Lane B enterprise adoption is slower** than individual adoption (security teams hesitate to allow direct production access) | Start enterprises in shared-dev and staging; sell just-in-time credentials, break-glass and session recording as the controls that make production direct access acceptable. Lane A carries early revenue meanwhile |
-| **Lane A absorbed by platforms** (GitHub/GitLab add native agent-PR risk checks) | Lane B, cross-system checkpoints and the promotion/reconciliation bridge are much harder for a single platform to replicate |
-| **Adapter maintenance load** | Conformance suite; community certification; commercial packs only where customers pay |
-| **Liability** for a wrong undo | Conservative reversibility classes; guarded inverses; clear documentation of limits |
-| **Open questions** | Does ServiceNow accept machine-evidence-based standard changes at partner companies? How much does masked-clone provisioning cost per rehearsal at scale? Is an MCP extension for plan/approve/undo welcomed by the spec maintainers? Will GitHub/GitLab expose richer agent-provenance signals we can rely on? |
-
----
 
 ## Appendix: sources and references
 
